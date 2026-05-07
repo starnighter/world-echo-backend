@@ -32,6 +32,9 @@
 - `test-files/test-environmental-sound.m4a` 的本地 Essentia 真分析验证
 - 真实 `POST /v1/songs/generate/voice` 链路验证（Essentia -> SiliconFlow -> MiniMax，`model_used=music-2.6`）
 - 真实 Essentia 音频生成结果已复制到 `playback-check/20260507-203716/voice-essentia-real.mp3`
+- 本地仅保留 Python 3.11 的 `.venv`，已删除旧的 `.venv-py314-backup`
+- 已定位 PyCharm 对 `essentia.standard` 的引用报错来源，并修正 `.idea/misc.xml` 中残留的 `Python 3.14` Black SDK 配置
+- 歌曲生成完成后的 `cover_url` 值已改为随机 `1-8` 的字符串，字段名保持不变
 
 ## 当前正在做的模块
 
@@ -60,6 +63,7 @@
 - `app/services/storage_service.py`
 - `Dockerfile`
 - `docker-compose.yml`
+- `.idea/misc.xml`
 - `app/tests/test_api_endpoints.py`
 - `playback-check/20260507-203716/prompt.mp3`
 - `playback-check/20260507-203716/image.mp3`
@@ -91,6 +95,10 @@
 - `MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python ... AudioAnalysisService.analyze(test-files/test-environmental-sound.m4a)`：通过，返回 `bpm=119.87`、`key=F minor`、真实 `genre/tags` 与 `spectrogram_path`。
 - 本地 Python 3.11 进程启动真实模式 API：通过，服务运行在 `http://127.0.0.1:8006`。
 - 使用普通注册账号调用真实 `POST /v1/songs/generate/voice`（`test-files/test-environmental-sound.m4a`，`ENABLE_ESSENTIA=true`，`MOCK_AUDIO_ANALYSIS=false`，`MOCK_VISION_PROMPT=false`，`MOCK_MINIMAX=false`，`MOCK_ASR=true`，`model_used=music-2.6`）：通过，收到多段 `status=1`，最终收到 `status=2`，生成歌曲 `3c1fd869-d017-436e-8e3b-5e8feb5eb8bf`，结果文件 `/static/generated/music/2026/05/07/1cb8440987dcd88d98996e506e6c0ff9.mp3`，并已复制到 `playback-check/20260507-203716/voice-essentia-real.mp3`。
+- `.venv/bin/python` 运行时检查 `essentia.standard.FrameGenerator / Spectrum / Windowing / MonoLoader / RhythmExtractor2013 / KeyExtractor / TensorflowPredict2D / TensorflowPredictEffnetDiscogs`：全部存在，说明不是代码引用错误。
+- 检查 `.venv/lib/python3.11/site-packages/essentia/standard.py`：这些类由 `_reloadAlgorithms()` 和 `create_python_algorithms()` 在模块导入时动态注入，属于运行时生成，不是静态声明。
+- 检查 PyCharm 配置：`.idea/misc.xml` 中 `ProjectRootManager` 已是 `Python 3.11`，但 `Black` 组件仍残留 `Python 3.14 (world-echo-backend)`，已修正为 `Python 3.11 (world-echo-backend)`。
+- 已更新 SSE 生成测试，校验 `cover_url` 字段值在 `1-8` 范围内。
 
 ## 尚未解决的问题
 
@@ -102,6 +110,7 @@
 - 讯飞 RTASR 对静音/无效音频帧会返回 `engine error|37005:Client idle timeout`；当前证明的是桥接和错误透传正常，不是“有效语音样本识别通过”。
 - 某些非流式 HTTP 客户端（如直接 `httpx.post()` 等整个 SSE body 读完）可能在最终事件已返回后看到 `incomplete chunked read`；前端按 SSE 逐行消费不受影响，但仍建议补一个收尾回归测试。
 - 中断或非流式消费 SSE 时，数据库里可能留下 `status=processing` 的历史记录（例如 `164bc139-f743-4a2a-a09f-a7dd99e5321a`）；需要后续补客户端断连收尾策略。
+- PyCharm 对 `essentia.standard` 的 “Cannot find reference ...” 仍大概率会继续出现，因为这是 IDE 对动态注入 API 的静态分析局限，不是当前代码本身错误；3.14 配置残留已消除，但不能保证完全消除这类黄线。
 - 目前覆盖的是主 happy path；更细的异常路径、并发场景、SSE 断线恢复仍可继续补强。
 - `docs/wolrd-echo-architecture.png` 文件名与需求描述不一致，实施按仓库实际文件名处理。
 

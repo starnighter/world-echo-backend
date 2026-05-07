@@ -12,6 +12,7 @@ def test_prompt_generation_sse(client, auth_headers):
     assert events[0]["data"]["status"] == 1
     assert events[-1]["data"]["status"] == 2
     assert events[-1]["data"]["song"]["source_type"] == "prompt"
+    assert events[-1]["data"]["song"]["cover_url"] in {str(i) for i in range(1, 9)}
 
 
 def test_image_generation_sse(client, auth_headers):
@@ -31,6 +32,7 @@ def test_image_generation_sse(client, auth_headers):
     assert events[-1]["data"]["status"] == 2
     assert events[-1]["data"]["song"]["source_type"] == "image"
     assert events[-1]["data"]["song"]["music_url"].startswith("/static/generated/music/")
+    assert events[-1]["data"]["song"]["cover_url"] in {str(i) for i in range(1, 9)}
 
 
 def test_voice_generation_sse(client, auth_headers):
@@ -50,3 +52,4 @@ def test_voice_generation_sse(client, auth_headers):
     assert events[-1]["data"]["status"] == 2
     assert events[-1]["data"]["song"]["source_type"] == "voice"
     assert "asr_text" in events[-1]["data"]["song"]["extracted_data"]
+    assert events[-1]["data"]["song"]["cover_url"] in {str(i) for i in range(1, 9)}

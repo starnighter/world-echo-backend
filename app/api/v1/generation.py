@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 from typing import Annotated, AsyncIterator
 
@@ -94,8 +95,7 @@ async def _stream_song_generation(
                 final_extra = chunk.extra_info
 
         music_url = storage_service.save_bytes(bytes.fromhex(final_audio_hex), "generated/music", "mp3")
-        cover_bytes = f"cover:{source_type}:{song.id}".encode("utf-8")
-        cover_url = storage_service.save_bytes(cover_bytes, "generated/covers", "txt")
+        cover_url = str(random.randint(1, 8))
         song = await song_service.complete_song(
             db,
             song,
