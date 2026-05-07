@@ -1,0 +1,1658 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "World Echo API",
+    "description": "World Echo 音乐生成平台 API 接口文档\n\n功能包括：\n- 第三方 OAuth 登录\n- AI 歌曲生成（图片/声音/提示词）\n- 语音转文字（ASR）\n- 歌曲管理与歌曲广场\n- 歌单管理\n- 点赞系统",
+    "version": "1.0.0",
+    "contact": {
+      "name": "World Echo Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.world-echo.com/v1",
+      "description": "生产环境"
+    },
+    {
+      "url": "http://localhost:3000/v1",
+      "description": "本地开发"
+    }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "认证与用户管理" },
+    { "name": "Upload", "description": "文件上传" },
+    { "name": "Generation", "description": "AI 歌曲生成" },
+    { "name": "ASR", "description": "语音转文字" },
+    { "name": "Songs", "description": "歌曲管理" },
+    { "name": "Playlists", "description": "歌单管理" },
+    { "name": "Plaza", "description": "歌曲广场" },
+    { "name": "Favorites", "description": "点赞" }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "普通账号注册",
+        "description": "使用用户名、邮箱和密码注册普通账号，注册成功后直接返回 JWT",
+        "operationId": "register",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/AuthTokenResponse" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "409": { "description": "用户名或邮箱已存在" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "普通账号登录",
+        "description": "使用用户名或邮箱加密码登录普通账号",
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/AuthTokenResponse" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "账号或密码错误" },
+          "422": { "description": "用户已被封禁" }
+        }
+      }
+    },
+    "/auth/oauth/{provider}/url": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "获取第三方登录 URL",
+        "description": "获取指定 OAuth 提供商的授权跳转地址",
+        "operationId": "getOAuthUrl",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "description": "提供商名称",
+            "schema": {
+              "type": "string",
+              "enum": ["github", "qq"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "url": "https://github.com/login/oauth/authorize?client_id=xxx&redirect_uri=xxx&scope=user"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/oauth/{provider}/callback": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "第三方登录回调",
+        "description": "用户完成第三方授权后的回调接口，自动注册新用户或登录已有用户",
+        "operationId": "oauthCallback",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["github", "qq"]
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "description": "OAuth 授权码",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "防 CSRF 状态码",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "token": { "type": "string", "description": "JWT Token" },
+                            "user": { "$ref": "#/components/schemas/User" },
+                            "is_new_user": { "type": "boolean" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "授权码无效或已过期" },
+          "422": { "description": "用户已被封禁" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "登出",
+        "operationId": "logout",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiResponse" }
+              }
+            }
+          },
+          "401": { "description": "未登录" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "获取当前用户信息",
+        "operationId": "getCurrentUser",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/UserDetail" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" }
+        }
+      },
+      "put": {
+        "tags": ["Auth"],
+        "summary": "更新用户资料",
+        "operationId": "updateCurrentUser",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": { "type": "string", "minLength": 2, "maxLength": 50, "description": "新用户名" },
+                  "email": { "type": "string", "format": "email", "description": "新邮箱" },
+                  "avatar_url": { "type": "string", "description": "新头像 URL" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/User" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "409": { "description": "用户名已被占用" }
+        }
+      }
+    },
+    "/upload/image": {
+      "post": {
+        "tags": ["Upload"],
+        "summary": "上传图片",
+        "description": "上传图片文件，返回 CDN 地址。支持 jpg、png、webp，最大 10MB",
+        "operationId": "uploadImage",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "图片文件"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "url": { "type": "string", "description": "图片 CDN 地址" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "文件格式不支持或文件过大" },
+          "401": { "description": "未登录" }
+        }
+      }
+    },
+    "/upload/audio": {
+      "post": {
+        "tags": ["Upload"],
+        "summary": "上传音频",
+        "description": "上传音频文件，返回 CDN 地址。支持 mp3、wav、m4a、ogg，最大 50MB",
+        "operationId": "uploadAudio",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "音频文件"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "url": { "type": "string", "description": "音频 CDN 地址" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "文件格式不支持或文件过大" },
+          "401": { "description": "未登录" }
+        }
+      }
+    },
+    "/songs/generate/image": {
+      "post": {
+        "tags": ["Generation"],
+        "summary": "图片生成歌曲（SSE）",
+        "description": "通过图片生成歌曲，以 SSE 流式返回生成进度和音频数据。status=1 合成中（含 audio_hex 片段），status=2 完成（含完整元数据和歌曲信息），status=3 失败",
+        "operationId": "generateSongFromImage",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "Accept",
+            "in": "header",
+            "required": true,
+            "description": "必须为 text/event-stream",
+            "schema": { "type": "string", "default": "text/event-stream" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImageGenerateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE 事件流",
+            "content": {
+              "text/event-stream": {
+                "schema": { "$ref": "#/components/schemas/SSEEvent" }
+              }
+            }
+          },
+          "400": { "description": "请求参数错误" },
+          "401": { "description": "未登录" },
+          "422": { "description": "业务校验失败" }
+        }
+      }
+    },
+    "/songs/generate/voice": {
+      "post": {
+        "tags": ["Generation"],
+        "summary": "声音生成歌曲（SSE）",
+        "description": "通过声音生成歌曲，以 SSE 流式返回。status=1 合成中，status=2 完成，status=3 失败",
+        "operationId": "generateSongFromVoice",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "Accept",
+            "in": "header",
+            "required": true,
+            "description": "必须为 text/event-stream",
+            "schema": { "type": "string", "default": "text/event-stream" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/VoiceGenerateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE 事件流",
+            "content": {
+              "text/event-stream": {
+                "schema": { "$ref": "#/components/schemas/SSEEvent" }
+              }
+            }
+          },
+          "400": { "description": "请求参数错误" },
+          "401": { "description": "未登录" },
+          "422": { "description": "业务校验失败" }
+        }
+      }
+    },
+    "/songs/generate/prompt": {
+      "post": {
+        "tags": ["Generation"],
+        "summary": "提示词生成歌曲（SSE）",
+        "description": "通过纯文字提示词生成歌曲，以 SSE 流式返回。status=1 合成中，status=2 完成，status=3 失败",
+        "operationId": "generateSongFromPrompt",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "Accept",
+            "in": "header",
+            "required": true,
+            "description": "必须为 text/event-stream",
+            "schema": { "type": "string", "default": "text/event-stream" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PromptGenerateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE 事件流",
+            "content": {
+              "text/event-stream": {
+                "schema": { "$ref": "#/components/schemas/SSEEvent" }
+              }
+            }
+          },
+          "400": { "description": "请求参数错误" },
+          "401": { "description": "未登录" },
+          "422": { "description": "业务校验失败" }
+        }
+      }
+    },
+    "/asr/transcribe": {
+      "post": {
+        "tags": ["ASR"],
+        "summary": "语音转文字",
+        "description": "将音频文件中的语音内容转为文字，支持中英文等多语言识别",
+        "operationId": "transcribeAudio",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "音频文件，支持 mp3/wav/m4a/ogg，最大 50MB"
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "期望识别的语言代码，如 zh、en、ja，默认自动检测",
+                    "example": "zh"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/AsrResult" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "文件格式不支持或文件过大" },
+          "401": { "description": "未登录" },
+          "422": { "description": "音频内容无法识别" }
+        }
+      }
+    },
+    "/asr/stream": {
+      "x-websocket": {
+        "tags": ["ASR"],
+        "summary": "实时语音转文字 WebSocket",
+        "description": "客户端通过 WebSocket 向该地址持续发送音频二进制帧，文本帧 `__end__` 表示结束。服务端会回传 `started / result / error / raw` 事件。",
+        "urlTemplate": "ws://localhost:8000/v1/asr/stream?language={language}",
+        "queryParameters": [
+          {
+            "name": "language",
+            "required": false,
+            "schema": { "type": "string", "default": "zh" },
+            "description": "期望识别语言"
+          }
+        ],
+        "clientMessages": [
+          { "type": "binary", "description": "音频流分片" },
+          { "type": "text", "value": "__end__", "description": "结束音频流" }
+        ],
+        "serverMessages": [
+          {
+            "type": "json",
+            "example": { "event": "started", "language": "zh" }
+          },
+          {
+            "type": "json",
+            "example": { "event": "result", "text": "今天天气真好", "is_final": false }
+          },
+          {
+            "type": "json",
+            "example": { "event": "error", "text": "engine error|37005:Client idle timeout" }
+          }
+        ]
+      }
+    },
+    "/songs": {
+      "get": {
+        "tags": ["Songs"],
+        "summary": "我的歌曲列表",
+        "description": "获取当前用户的所有歌曲，支持分页和筛选",
+        "operationId": "getMySongs",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1, "minimum": 1 }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20, "minimum": 1, "maximum": 50 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "按状态筛选",
+            "schema": { "type": "string", "enum": ["pending", "processing", "done", "failed"] }
+          },
+          {
+            "name": "source_type",
+            "in": "query",
+            "description": "按来源类型筛选",
+            "schema": { "type": "string", "enum": ["image", "voice", "prompt"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/SongListResponse" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" }
+        }
+      }
+    },
+    "/songs/{id}": {
+      "get": {
+        "tags": ["Songs"],
+        "summary": "歌曲详情",
+        "operationId": "getSongDetail",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Song" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权查看" },
+          "404": { "description": "歌曲不存在" }
+        }
+      },
+      "put": {
+        "tags": ["Songs"],
+        "summary": "修改歌曲信息",
+        "description": "修改歌曲标题、歌词等（仅限本人且状态为 done 的歌曲）",
+        "operationId": "updateSong",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SongUpdateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Song" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权修改" },
+          "404": { "description": "歌曲不存在" },
+          "422": { "description": "歌曲尚未生成完成" }
+        }
+      },
+      "delete": {
+        "tags": ["Songs"],
+        "summary": "删除歌曲",
+        "description": "软删除歌曲",
+        "operationId": "deleteSong",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiResponse" }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权删除" },
+          "404": { "description": "歌曲不存在" }
+        }
+      }
+    },
+    "/songs/{id}/publish": {
+      "put": {
+        "tags": ["Songs"],
+        "summary": "发布/取消发布到广场",
+        "operationId": "publishSong",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["is_public"],
+                "properties": {
+                  "is_public": {
+                    "type": "boolean",
+                    "description": "true 发布到广场，false 从广场撤回"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "string", "format": "uuid" },
+                            "is_public": { "type": "boolean" },
+                            "published_at": { "type": "string", "format": "date-time", "nullable": true }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权操作" },
+          "404": { "description": "歌曲不存在" },
+          "422": { "description": "歌曲尚未生成完成" }
+        }
+      }
+    },
+    "/playlists": {
+      "get": {
+        "tags": ["Playlists"],
+        "summary": "我的歌单列表",
+        "operationId": "getMyPlaylists",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "items": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/PlaylistSummary" }
+                            },
+                            "total": { "type": "integer" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" }
+        }
+      },
+      "post": {
+        "tags": ["Playlists"],
+        "summary": "创建歌单",
+        "operationId": "createPlaylist",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PlaylistCreateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Playlist" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "请求参数错误" },
+          "401": { "description": "未登录" }
+        }
+      }
+    },
+    "/playlists/{id}": {
+      "get": {
+        "tags": ["Playlists"],
+        "summary": "歌单详情",
+        "description": "获取歌单详情及其包含的歌曲列表",
+        "operationId": "getPlaylistDetail",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/PlaylistDetail" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权查看" },
+          "404": { "description": "歌单不存在" }
+        }
+      },
+      "put": {
+        "tags": ["Playlists"],
+        "summary": "编辑歌单",
+        "operationId": "updatePlaylist",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PlaylistUpdateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Playlist" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权编辑" },
+          "404": { "description": "歌单不存在" }
+        }
+      },
+      "delete": {
+        "tags": ["Playlists"],
+        "summary": "删除歌单",
+        "description": "软删除歌单，默认歌单不可删除",
+        "operationId": "deletePlaylist",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiResponse" }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权删除" },
+          "404": { "description": "歌单不存在" },
+          "422": { "description": "默认歌单不可删除" }
+        }
+      }
+    },
+    "/playlists/{id}/songs": {
+      "post": {
+        "tags": ["Playlists"],
+        "summary": "添加歌曲到歌单",
+        "operationId": "addSongToPlaylist",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["song_id"],
+                "properties": {
+                  "song_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "歌曲 ID"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/PlaylistItem" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权操作" },
+          "404": { "description": "歌单或歌曲不存在" },
+          "409": { "description": "歌曲已在歌单中" }
+        }
+      }
+    },
+    "/playlists/{id}/songs/{songId}": {
+      "delete": {
+        "tags": ["Playlists"],
+        "summary": "从歌单移除歌曲",
+        "operationId": "removeSongFromPlaylist",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "songId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiResponse" }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权操作" },
+          "404": { "description": "歌单不存在或歌曲不在歌单中" }
+        }
+      }
+    },
+    "/playlists/{id}/songs/sort": {
+      "put": {
+        "tags": ["Playlists"],
+        "summary": "歌单内歌曲排序",
+        "description": "批量调整歌单内歌曲的顺序",
+        "operationId": "sortPlaylistSongs",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["song_ids"],
+                "properties": {
+                  "song_ids": {
+                    "type": "array",
+                    "items": { "type": "string", "format": "uuid" },
+                    "description": "按新顺序排列的歌曲 ID 数组"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "sorted_count": { "type": "integer" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "403": { "description": "无权操作" },
+          "404": { "description": "歌单不存在" },
+          "422": { "description": "song_ids 包含不属于该歌单的歌曲" }
+        }
+      }
+    },
+    "/plaza": {
+      "get": {
+        "tags": ["Plaza"],
+        "summary": "广场歌曲流",
+        "description": "获取歌曲广场的公开歌曲列表，按发布时间倒序",
+        "operationId": "getPlazaSongs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1, "minimum": 1 }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20, "minimum": 1, "maximum": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/PlazaListResponse" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plaza/{id}": {
+      "get": {
+        "tags": ["Plaza"],
+        "summary": "广场歌曲详情",
+        "operationId": "getPlazaSongDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/PlazaSongDetail" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "404": { "description": "歌曲不存在或未发布到广场" }
+        }
+      }
+    },
+    "/favorites/{songId}": {
+      "post": {
+        "tags": ["Favorites"],
+        "summary": "点赞",
+        "description": "对广场歌曲点赞，同一用户对同一首歌只能点赞一次",
+        "operationId": "likeSong",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "songId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "integer" },
+                            "song_id": { "type": "string", "format": "uuid" },
+                            "created_at": { "type": "string", "format": "date-time" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "404": { "description": "歌曲不存在" },
+          "409": { "description": "已经点赞过" },
+          "422": { "description": "不能点赞自己的歌曲或歌曲未发布" }
+        }
+      },
+      "delete": {
+        "tags": ["Favorites"],
+        "summary": "取消点赞",
+        "operationId": "unlikeSong",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "songId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiResponse" }
+              }
+            }
+          },
+          "401": { "description": "未登录" },
+          "404": { "description": "歌曲不存在或未点赞" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Token，可通过普通注册/登录或 OAuth 登录回调获取"
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer", "description": "状态码，0 表示成功" },
+          "message": { "type": "string", "description": "状态描述" },
+          "data": { "description": "响应数据" }
+        },
+        "required": ["code", "message"]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "username": { "type": "string" },
+          "email": { "type": "string", "format": "email", "nullable": true },
+          "avatar_url": { "type": "string", "nullable": true },
+          "is_banned": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UserDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/User" },
+          {
+            "type": "object",
+            "properties": {
+              "oauths": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "provider": { "type": "string" },
+                    "created_at": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "minLength": 2, "maxLength": 50 },
+          "email": { "type": "string", "format": "email", "nullable": true },
+          "password": { "type": "string", "minLength": 6, "maxLength": 128 }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["account", "password"],
+        "properties": {
+          "account": { "type": "string", "description": "用户名或邮箱" },
+          "password": { "type": "string", "minLength": 6, "maxLength": 128 }
+        }
+      },
+      "AuthTokenResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "user": { "$ref": "#/components/schemas/UserDetail" }
+        },
+        "required": ["token", "user"]
+      },
+      "Song": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "user_id": { "type": "string", "format": "uuid" },
+          "source_type": { "type": "string", "enum": ["image", "voice", "prompt"] },
+          "extracted_data": { "type": "object", "nullable": true, "description": "中间分析结果 JSON" },
+          "model_used": { "type": "string" },
+          "prompt": { "type": "string", "nullable": true },
+          "lyrics": { "type": "string", "nullable": true },
+          "is_instrumental": { "type": "boolean" },
+          "source_url": { "type": "string", "nullable": true },
+          "title": { "type": "string", "nullable": true },
+          "description": { "type": "string", "nullable": true },
+          "status": { "type": "string", "enum": ["pending", "processing", "done", "failed"] },
+          "music_url": { "type": "string", "nullable": true },
+          "cover_url": { "type": "string", "nullable": true },
+          "error_msg": { "type": "string", "nullable": true },
+          "is_public": { "type": "boolean" },
+          "published_at": { "type": "string", "format": "date-time", "nullable": true },
+          "likes_count": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SongSummary": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "source_type": { "type": "string", "enum": ["image", "voice", "prompt"] },
+          "status": { "type": "string", "enum": ["pending", "processing", "done", "failed"] },
+          "title": { "type": "string", "nullable": true },
+          "description": { "type": "string", "nullable": true },
+          "cover_url": { "type": "string", "nullable": true },
+          "music_url": { "type": "string", "nullable": true },
+          "is_instrumental": { "type": "boolean" },
+          "is_public": { "type": "boolean" },
+          "likes_count": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SongListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/SongSummary" }
+          },
+          "total": { "type": "integer" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        }
+      },
+      "ImageGenerateRequest": {
+        "type": "object",
+        "required": ["source_url"],
+        "properties": {
+          "source_url": { "type": "string", "description": "图片 URL（通过上传接口获取）" },
+          "prompt": { "type": "string", "description": "额外的风格/内容提示词" },
+          "lyrics": { "type": "string", "description": "自定义歌词" },
+          "is_instrumental": { "type": "boolean", "default": false, "description": "是否纯音乐" },
+          "model_used": { "type": "string", "default": "music-2.6", "description": "模型选择" }
+        }
+      },
+      "VoiceGenerateRequest": {
+        "type": "object",
+        "required": ["source_url"],
+        "properties": {
+          "source_url": { "type": "string", "description": "音频 URL（通过上传接口获取）" },
+          "prompt": { "type": "string", "description": "额外的风格/内容提示词" },
+          "lyrics": { "type": "string", "description": "自定义歌词" },
+          "is_instrumental": { "type": "boolean", "default": false, "description": "是否纯音乐" },
+          "model_used": { "type": "string", "default": "music-cover", "description": "模型选择" }
+        }
+      },
+      "PromptGenerateRequest": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": { "type": "string", "description": "音乐风格/内容描述" },
+          "lyrics": { "type": "string", "description": "自定义歌词" },
+          "is_instrumental": { "type": "boolean", "default": false, "description": "是否纯音乐" },
+          "model_used": { "type": "string", "default": "music-2.6", "description": "模型选择" }
+        }
+      },
+      "SongUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 200, "description": "歌曲标题" },
+          "description": { "type": "string", "description": "歌曲描述" }
+        }
+      },
+      "SSEEvent": {
+        "type": "object",
+        "description": "SSE 事件格式，每个 data 行为一个 JSON 对象",
+        "properties": {
+          "code": { "type": "integer", "description": "状态码，0 表示成功" },
+          "message": { "type": "string", "description": "状态描述" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "enum": [1, 2, 3],
+                "description": "1=合成中，2=生成完成，3=生成失败"
+              },
+              "audio_hex": {
+                "type": "string",
+                "description": "hex 编码的音频数据片段（status=1 时为中间片段，status=2 时为最后一段）"
+              },
+              "extra_info": {
+                "$ref": "#/components/schemas/SSEExtraInfo"
+              },
+              "song": {
+                "allOf": [
+                  { "$ref": "#/components/schemas/Song" },
+                  { "description": "歌曲完整信息（仅 status=2 时返回）" }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "SSEExtraInfo": {
+        "type": "object",
+        "nullable": true,
+        "description": "音频元数据（仅 status=2 时返回）",
+        "properties": {
+          "duration": { "type": "integer", "description": "音频总时长（毫秒）" },
+          "sample_rate": { "type": "integer", "description": "采样率，如 44100" },
+          "channel": { "type": "integer", "description": "声道数" },
+          "bitrate": { "type": "integer", "description": "比特率" },
+          "size": { "type": "integer", "description": "音频总大小（字节）" }
+        }
+      },
+      "AsrResult": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string", "description": "识别出的文字内容" },
+          "language": { "type": "string", "description": "识别到的语言代码" },
+          "duration": { "type": "number", "format": "float", "description": "音频时长（秒）" }
+        }
+      },
+      "Playlist": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "cover_url": { "type": "string", "nullable": true },
+          "is_public": { "type": "boolean" },
+          "is_default": { "type": "boolean" },
+          "songs_count": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "PlaylistSummary": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "cover_url": { "type": "string", "nullable": true },
+          "is_public": { "type": "boolean" },
+          "is_default": { "type": "boolean" },
+          "songs_count": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "PlaylistDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Playlist" },
+          {
+            "type": "object",
+            "properties": {
+              "songs": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/PlaylistSongItem" }
+                  },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PlaylistSongItem": {
+        "type": "object",
+        "properties": {
+          "playlist_item_id": { "type": "integer" },
+          "sort_order": { "type": "integer" },
+          "added_at": { "type": "string", "format": "date-time" },
+          "song": { "$ref": "#/components/schemas/SongSummary" }
+        }
+      },
+      "PlaylistItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "playlist_id": { "type": "integer" },
+          "song_id": { "type": "string", "format": "uuid" },
+          "sort_order": { "type": "integer" },
+          "added_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "PlaylistCreateRequest": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 100, "description": "歌单名称" },
+          "description": { "type": "string", "description": "歌单描述" },
+          "cover_url": { "type": "string", "description": "封面图 URL" },
+          "is_public": { "type": "boolean", "default": false, "description": "是否公开" }
+        }
+      },
+      "PlaylistUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "description": { "type": "string" },
+          "cover_url": { "type": "string" },
+          "is_public": { "type": "boolean" }
+        }
+      },
+      "PlazaSongItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "title": { "type": "string", "nullable": true },
+          "description": { "type": "string", "nullable": true },
+          "cover_url": { "type": "string", "nullable": true },
+          "music_url": { "type": "string", "nullable": true },
+          "source_type": { "type": "string", "enum": ["image", "voice", "prompt"] },
+          "is_instrumental": { "type": "boolean" },
+          "likes_count": { "type": "integer" },
+          "is_liked": { "type": "boolean", "description": "当前用户是否已点赞" },
+          "published_at": { "type": "string", "format": "date-time" },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "username": { "type": "string" },
+              "avatar_url": { "type": "string", "nullable": true }
+            }
+          }
+        }
+      },
+      "PlazaSongDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/PlazaSongItem" },
+          {
+            "type": "object",
+            "properties": {
+              "model_used": { "type": "string" },
+              "prompt": { "type": "string", "nullable": true },
+              "lyrics": { "type": "string", "nullable": true },
+              "created_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        ]
+      },
+      "PlazaListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PlazaSongItem" }
+          },
+          "total": { "type": "integer" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

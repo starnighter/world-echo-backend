@@ -7,6 +7,7 @@
 - [x] Phase 3: Implement songs, playlists, plaza, favorites, ASR, SSE generation, external service adapters.
 - [x] Phase 4: Add tests, Docker/dev setup, README, verification, final cleanup.
 - [x] Phase 5: Validate available real third-party integrations and fix runtime mismatches.
+- [x] Phase 6: Add normal register/login auth, sync API docs/OpenAPI JSON, and validate generation endpoints with curated test files.
 
 ## Module Breakdown
 
@@ -79,6 +80,21 @@
 - [ ] Validate real QQ OAuth callback flow.
 - [ ] Validate real file transcription flow for `/v1/asr/transcribe`.
 - [ ] Validate fully real voice-generation flow with `ENABLE_ESSENTIA=true` and non-mock audio analysis.
+
+## Auth And Docs Sync
+
+- [x] Add `/auth/register` for username/email/password signup.
+- [x] Add `/auth/login` for username-or-email plus password signin.
+- [x] Persist password hashes on `users.password_hash`.
+- [x] Update `database/init.sql` and runtime DB bootstrap for the new auth column.
+- [x] Sync `docs/API-DOCS.md` with the new auth endpoints and the XFYun realtime WebSocket interface.
+- [x] Sync `docs/world-echo-api.json` with the new auth endpoints and a path-level `x-websocket` description for `/asr/stream`.
+
+## Playback Validation
+
+- [x] Re-run `prompt`, `image`, and `voice` generation endpoints with files from `test-files/`.
+- [x] Skip direct ASR endpoint smoke tests during this playback pass.
+- [x] Copy generated music outputs into a single local playback directory for manual review.
 
 ## Risks
 

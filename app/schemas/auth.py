@@ -31,6 +31,22 @@ class OAuthCallbackResponse(BaseModel):
     is_new_user: bool
 
 
+class AuthTokenResponse(BaseModel):
+    token: str
+    user: UserProfile
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=2, max_length=50)
+    email: str | None = None
+    password: str = Field(min_length=6, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    account: str = Field(min_length=2, max_length=255)
+    password: str = Field(min_length=6, max_length=128)
+
+
 class UpdateMeRequest(BaseModel):
     username: str | None = Field(default=None, min_length=2, max_length=50)
     email: str | None = None

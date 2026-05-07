@@ -1,16 +1,24 @@
 from io import BytesIO
 
 
-def test_auth_me_and_default_playlist(client):
-    login = client.get("/v1/auth/oauth/github/callback?code=auth-smoke")
-    assert login.status_code == 200
-    token = login.json()["data"]["token"]
+def test_register_login_me_and_default_playlist(client):
+    register = client.post(
+        "/v1/auth/register",
+        json={"username": "auth_smoke", "email": "auth@example.com", "password": "secret123"},
+    )
+    assert register.status_code == 200
+    token = register.json()["data"]["token"]
 
     me = client.get("/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     me_payload = me.json()["data"]
-    assert me_payload["username"].startswith("github_user_")
-    assert len(me_payload["oauths"]) == 1
+    assert me_payload["username"] == "auth_smoke"
+    assert me_payload["email"] == "auth@example.com"
+    assert me_payload["oauths"] == []
+
+    login = client.post("/v1/auth/login", json={"account": "auth_smoke", "password": "secret123"})
+    assert login.status_code == 200
+    assert login.json()["data"]["user"]["username"] == "auth_smoke"
 
     playlists = client.get("/v1/playlists", headers={"Authorization": f"Bearer {token}"})
     assert playlists.status_code == 200
@@ -18,6 +26,12 @@ def test_auth_me_and_default_playlist(client):
     assert len(items) == 1
     assert items[0]["is_default"] is True
     assert items[0]["title"] == "我的收藏"
+
+    duplicate = client.post(
+        "/v1/auth/register",
+        json={"username": "auth_smoke", "email": "other@example.com", "password": "secret123"},
+    )
+    assert duplicate.status_code == 409
 
 
 def test_upload_and_asr_flow(client, auth_headers):

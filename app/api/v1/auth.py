@@ -8,7 +8,14 @@ from app.core.config import get_settings
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
-from app.schemas.auth import OAuthCallbackResponse, OAuthUrlResponse, UpdateMeRequest
+from app.schemas.auth import (
+    AuthTokenResponse,
+    LoginRequest,
+    OAuthCallbackResponse,
+    OAuthUrlResponse,
+    RegisterRequest,
+    UpdateMeRequest,
+)
 from app.services.auth_service import AuthService
 from app.services.oauth_service import OAuthService
 
@@ -17,6 +24,27 @@ router = APIRouter()
 settings = get_settings()
 oauth_service = OAuthService(settings)
 auth_service = AuthService()
+
+
+@router.post("/register")
+async def register(payload: RegisterRequest, db: Annotated[AsyncSession, Depends(get_db)]):
+    token, user = await auth_service.register(
+        db,
+        username=payload.username,
+        email=payload.email,
+        password=payload.password,
+    )
+    return success_response(AuthTokenResponse(token=token, user=auth_service.to_profile(user)).model_dump(mode="json"))
+
+
+@router.post("/login")
+async def login(payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]):
+    token, user = await auth_service.login_with_password(
+        db,
+        account=payload.account,
+        password=payload.password,
+    )
+    return success_response(AuthTokenResponse(token=token, user=auth_service.to_profile(user)).model_dump(mode="json"))
 
 
 @router.get("/oauth/{provider}/url")

@@ -43,6 +43,7 @@ class User(TimestampMixin, Base):
     )
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_banned: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"), nullable=False)
 
