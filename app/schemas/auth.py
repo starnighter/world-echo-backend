@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -15,7 +16,7 @@ class OAuthBinding(ORMModel):
 
 
 class UserProfile(ORMModel):
-    id: str
+    id: UUID
     username: str
     email: str | None = None
     avatar_url: str | None = None

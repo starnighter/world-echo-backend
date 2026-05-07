@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import secrets
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import ConflictException, UnprocessableException
 from app.core.security import create_access_token
 from app.db.models import Playlist, User, UserOAuth
-from app.schemas.auth import UserProfile
+from app.schemas.auth import OAuthBinding, UserProfile
 from app.services.oauth_service import OAuthIdentity
 
 
@@ -24,8 +25,7 @@ class AuthService:
         is_new_user = False
 
         if oauth is not None:
-            user = await db.get(User, oauth.user_id)
-            assert user is not None
+            user = await self._get_user_with_oauths(db, oauth.user_id)
         else:
             user = await self._create_user_with_oauth(db, identity)
             is_new_user = True
@@ -52,7 +52,18 @@ class AuthService:
 
     @staticmethod
     def to_profile(user: User) -> UserProfile:
-        return UserProfile.model_validate(user)
+        return UserProfile(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            avatar_url=user.avatar_url,
+            is_banned=user.is_banned,
+            created_at=user.created_at,
+            oauths=[
+                OAuthBinding(provider=oauth.provider, created_at=oauth.created_at)
+                for oauth in getattr(user, "oauths", [])
+            ],
+        )
 
     async def _create_user_with_oauth(self, db: AsyncSession, identity: OAuthIdentity) -> User:
         username = await self._unique_username(db, identity.username)
@@ -81,8 +92,7 @@ class AuthService:
             )
         )
         await db.commit()
-        await db.refresh(user)
-        return user
+        return await self._get_user_with_oauths(db, user.id)
 
     async def _unique_username(self, db: AsyncSession, base_name: str) -> str:
         candidate = base_name[:50] or "user"
@@ -92,3 +102,8 @@ class AuthService:
                 return candidate
             candidate = f"{base_name[:42]}_{secrets.token_hex(3)}"
         raise ConflictException("Unable to allocate username")
+
+    async def _get_user_with_oauths(self, db: AsyncSession, user_id) -> User:
+        result = await db.execute(select(User).options(selectinload(User.oauths)).where(User.id == user_id))
+        user = result.scalar_one()
+        return user

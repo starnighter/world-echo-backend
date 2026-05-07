@@ -5,7 +5,7 @@
 - [x] Phase 1: Create project skeleton, `BACKEND_PLAN.md`, `PROGRESS.md`, base FastAPI app, config, ORM models, common infrastructure.
 - [x] Phase 2: Implement auth and upload modules.
 - [x] Phase 3: Implement songs, playlists, plaza, favorites, ASR, SSE generation, external service adapters.
-- [ ] Phase 4: Add tests, Docker/dev setup, README, verification, final cleanup.
+- [x] Phase 4: Add tests, Docker/dev setup, README, verification, final cleanup.
 
 ## Module Breakdown
 
@@ -18,7 +18,7 @@
 - [x] Song management: list, detail, update, soft delete, publish/unpublish.
 - [x] Playlist management: CRUD, add/remove songs, sort.
 - [x] Plaza and favorites: public feed, detail, like/unlike.
-- [ ] Engineering: Docker, environment config, README, tests.
+- [x] Engineering: Docker, environment config, README, tests.
 
 ## API Implementation Order
 
@@ -30,7 +30,7 @@
 - [x] Plaza and favorite endpoints.
 - [x] ASR HTTP and WebSocket endpoints.
 - [x] SSE generation endpoints.
-- [ ] Test suite and local runtime packaging.
+- [x] Test suite and local runtime packaging.
 
 ## Database Mapping
 
@@ -61,11 +61,11 @@
 
 ## Test Plan
 
-- [ ] Unit tests for config, JWT, responses, exceptions, service rules.
+- [x] Unit tests for config, JWT, responses, exceptions, service rules.
 - [ ] API tests for auth, upload, songs, playlists, plaza, favorites, ASR.
 - [ ] SSE tests for prompt/image/voice generation flows.
 - [ ] WebSocket tests for realtime ASR bridge.
-- [ ] Mock-mode integration tests.
+- [x] Mock-mode integration tests.
 
 ## Risks
 

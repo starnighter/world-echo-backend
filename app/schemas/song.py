@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -11,7 +12,7 @@ SongStatus = Literal["pending", "processing", "done", "failed"]
 
 
 class SongSummary(ORMModel):
-    id: str
+    id: UUID
     source_type: SourceType
     title: str | None = None
     description: str | None = None
@@ -25,8 +26,8 @@ class SongSummary(ORMModel):
 
 
 class SongDetail(ORMModel):
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     source_type: SourceType
     extracted_data: dict[str, Any] | None = None
     model_used: str

@@ -5,6 +5,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import UnauthorizedException
 from app.core.security import decode_access_token
@@ -25,7 +26,7 @@ async def get_current_user(
     subject = payload.get("sub")
     if not subject:
         raise UnauthorizedException("Token invalid or expired")
-    result = await db.execute(select(User).where(User.id == UUID(subject)))
+    result = await db.execute(select(User).options(selectinload(User.oauths)).where(User.id == UUID(subject)))
     user = result.scalar_one_or_none()
     if user is None:
         raise UnauthorizedException("User not found")
