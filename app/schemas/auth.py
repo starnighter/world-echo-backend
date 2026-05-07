@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
 
@@ -17,7 +17,7 @@ class OAuthBinding(ORMModel):
 class UserProfile(ORMModel):
     id: str
     username: str
-    email: EmailStr | None = None
+    email: str | None = None
     avatar_url: str | None = None
     is_banned: bool
     created_at: datetime | None = None
@@ -32,5 +32,5 @@ class OAuthCallbackResponse(BaseModel):
 
 class UpdateMeRequest(BaseModel):
     username: str | None = Field(default=None, min_length=2, max_length=50)
-    email: EmailStr | None = None
+    email: str | None = None
     avatar_url: str | None = None
