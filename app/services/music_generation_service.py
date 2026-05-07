@@ -58,7 +58,11 @@ class MusicGenerationService:
         if audio_url:
             payload["audio_url"] = audio_url
 
-        async with httpx.AsyncClient(timeout=None) as client:
+        timeout = httpx.Timeout(connect=20.0, read=300.0, write=20.0, pool=20.0)
+        saw_final_chunk = False
+        streamed_audio_parts: list[str] = []
+        last_extra_info: dict[str, Any] | None = None
+        async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("POST", self.settings.minimax_api_url, headers=headers, json=payload) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
@@ -66,6 +70,13 @@ class MusicGenerationService:
                         continue
                     data = line[5:] if line.startswith("data:") else line
                     if data.strip() == "[DONE]":
+                        if streamed_audio_parts and not saw_final_chunk:
+                            saw_final_chunk = True
+                            yield GeneratedChunk(
+                                status=2,
+                                audio_hex="".join(streamed_audio_parts),
+                                extra_info=last_extra_info,
+                            )
                         break
                     item = httpx.Response(200, text=data).json()
                     base_resp = item.get("base_resp") or {}
@@ -74,10 +85,28 @@ class MusicGenerationService:
                     music_data = item.get("data") or {}
                     audio_hex = music_data.get("audio")
                     extra_info = self._normalize_extra_info(item.get("extra_info"))
+                    if extra_info:
+                        last_extra_info = extra_info
+                    if audio_hex:
+                        streamed_audio_parts.append(audio_hex)
+
+                    raw_status = music_data.get("status")
+                    if raw_status is None:
+                        if audio_hex:
+                            yield GeneratedChunk(status=1, audio_hex=audio_hex, extra_info=None)
+                        continue
+
+                    status = int(raw_status)
+                    saw_final_chunk = status == 2
+                    yield GeneratedChunk(status=status, audio_hex=audio_hex, extra_info=extra_info)
+                    if saw_final_chunk:
+                        break
+
+                if streamed_audio_parts and not saw_final_chunk:
                     yield GeneratedChunk(
-                        status=int(music_data["status"]),
-                        audio_hex=audio_hex,
-                        extra_info=extra_info,
+                        status=2,
+                        audio_hex="".join(streamed_audio_parts),
+                        extra_info=last_extra_info,
                     )
 
     async def _mock_stream_generate(self, *, model: str, prompt: str, lyrics: str | None) -> AsyncIterator[GeneratedChunk]:

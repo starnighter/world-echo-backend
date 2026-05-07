@@ -6,6 +6,7 @@
 - [x] Phase 2: Implement auth and upload modules.
 - [x] Phase 3: Implement songs, playlists, plaza, favorites, ASR, SSE generation, external service adapters.
 - [x] Phase 4: Add tests, Docker/dev setup, README, verification, final cleanup.
+- [x] Phase 5: Validate available real third-party integrations and fix runtime mismatches.
 
 ## Module Breakdown
 
@@ -66,6 +67,18 @@
 - [x] SSE tests for prompt/image/voice generation flows.
 - [x] WebSocket tests for realtime ASR bridge.
 - [x] Mock-mode integration tests.
+
+## Real Integration Validation
+
+- [x] Use `Qwen/Qwen3-VL-32B-Instruct` for SiliconFlow multimodal image analysis.
+- [x] Replace the audio prompt refiner template with the `audio_to_music_prompt.py` prompt and validate the real SiliconFlow call path.
+- [x] Validate the real MiniMax stream shape and patch the adapter to support status-less audio chunks plus final `[DONE]` synthesis.
+- [x] Validate the real image generation SSE chain to a final `status=2` event.
+- [x] Validate the real XFYun RTASR WebSocket bridge handshake and error forwarding, and fix close-path `500` handling.
+- [ ] Validate real GitHub OAuth callback flow.
+- [ ] Validate real QQ OAuth callback flow.
+- [ ] Validate real file transcription flow for `/v1/asr/transcribe`.
+- [ ] Validate fully real voice-generation flow with `ENABLE_ESSENTIA=true` and non-mock audio analysis.
 
 ## Risks
 

@@ -183,6 +183,7 @@ async def generate_voice_song(
         audio_features=analysis,
         asr_text=asr_result["text"],
         extra_prompt=payload.prompt,
+        spectrogram_path=None,
     )
     analysis["prompt_refinement"] = refined
     final_prompt = refined.get("style_prompt") or ", ".join(

@@ -18,109 +18,53 @@
 - mock OAuth 登录与 `/auth/me` 鉴权链路验证
 - API、SSE、WebSocket ASR 自动化测试
 - 真实第三方适配代码补齐（QQ OAuth、SiliconFlow、MiniMax、讯飞 RTASR、Essentia）
+- 可用真实第三方链路验证与运行期修正
+  - SiliconFlow 图像理解链路验证通过
+  - `prompt_refiner_service.py` 已切换到 `audio_to_music_prompt.py` 的提示词模板，并完成真实调用验证
+  - MiniMax 流式适配已修正，真实 SSE 可收到最终 `status=2`
+  - 讯飞实时 WebSocket 桥接已修正关闭路径，不再因上游提前关闭导致后端 `500`
 
 ## 当前正在做的模块
 
-- 真实联调准备已完成，当前阻塞于缺少第三方凭证。
+- 真实联调阶段已完成当前可验证部分，剩余未做的是缺少凭证或缺少配置的链路：GitHub/QQ OAuth、文件转写 ASR、全真实 voice 生成。
 
 ## 修改过的文件列表
 
 - `BACKEND_PLAN.md`
 - `PROGRESS.md`
-- `README.md`
 - `.env.example`
 - `app/core/config.py`
-- `.dockerignore`
-- `.gitignore`
-- `Dockerfile`
-- `docker-compose.yml`
-- `pyproject.toml`
-- `.env`
-- `app/main.py`
-- `app/core/__init__.py`
-- `app/core/config.py`
-- `app/core/responses.py`
-- `app/core/exceptions.py`
-- `app/core/security.py`
-- `app/db/__init__.py`
-- `app/db/base.py`
-- `app/db/models.py`
-- `app/db/session.py`
-- `app/db/init_db.py`
-- `app/api/__init__.py`
-- `app/api/deps.py`
-- `app/api/v1/__init__.py`
-- `app/api/v1/router.py`
-- `app/api/v1/auth.py`
-- `app/api/v1/upload.py`
-- `app/api/v1/asr.py`
-- `app/api/v1/songs.py`
-- `app/api/v1/playlists.py`
-- `app/api/v1/plaza.py`
-- `app/api/v1/favorites.py`
 - `app/api/v1/generation.py`
-- `app/schemas/__init__.py`
-- `app/schemas/common.py`
-- `app/schemas/auth.py`
-- `app/schemas/upload.py`
-- `app/schemas/song.py`
-- `app/schemas/playlist.py`
-- `app/schemas/plaza.py`
-- `app/schemas/favorite.py`
-- `app/schemas/asr.py`
-- `app/services/__init__.py`
-- `app/services/storage_service.py`
-- `app/services/oauth_service.py`
-- `app/services/auth_service.py`
 - `app/services/asr_service.py`
-- `app/services/audio_analysis_service.py`
-- `app/services/vision_prompt_service.py`
 - `app/services/music_generation_service.py`
 - `app/services/prompt_refiner_service.py`
-- `app/services/song_service.py`
-- `app/services/playlist_service.py`
-- `app/services/favorite_service.py`
-- `app/tests/__init__.py`
-- `app/tests/conftest.py`
-- `app/tests/test_core.py`
-- `app/tests/test_generation_helpers.py`
-- `app/tests/test_services.py`
-- `app/tests/test_api_endpoints.py`
-- `app/tests/test_generation_streams.py`
-- `app/tests/test_websocket_asr.py`
-- `app/models/discogs-effnet-bs64-1.json`
-- `app/models/discogs-effnet-bs64-1.pb`
-- `app/models/genre_discogs400-discogs-effnet-1.json`
-- `app/models/genre_discogs400-discogs-effnet-1.pb`
-- `app/models/mtg_jamendo_top50tags-discogs-effnet-1.json`
-- `app/models/mtg_jamendo_top50tags-discogs-effnet-1.pb`
 
 ## 已运行的测试和结果
 
 - `python3 -m compileall app`：通过。
-- `.venv/bin/python -m pip install -e '.[dev]'`：通过。
-- `.venv/bin/pytest app/tests -q`：`7 passed`。
-- `.venv/bin/python -c "import fastapi, sqlalchemy, httpx, jose; import app.main; print('import-ok')"`：通过。
-- `docker compose up -d db`：通过。
-- `docker compose up -d --build api`：通过。
-- `docker compose ps`：通过，测试数据库映射 `5433->5432` 正常。
-- `docker exec world-echo-backend-api-1 python -c "... urllib.request.urlopen('http://127.0.0.1:8000/health') ..."`：通过，返回 `{"code":0,"message":"success","data":{"status":"ok"}}`。
-- `docker exec world-echo-backend-api-1 python -c "... /v1/auth/oauth/github/callback ... /v1/auth/me ..."`：通过，mock OAuth 登录和 JWT 鉴权链路正常。
-- `.venv/bin/pytest app/tests -q`：`14 passed`。
-- `python3 -m compileall app`（在真实适配代码补齐后再次执行）：通过。
-- `.venv/bin/pytest app/tests -q`（在真实适配代码补齐后再次执行）：`14 passed`。
+- `.venv/bin/pytest app/tests -q`：`14 passed in 7.33s`。
+- 直接调用 `VisionPromptService.analyze_image()`（真实 SiliconFlow + `Qwen/Qwen3-VL-32B-Instruct`）：通过，返回 `scene/objects/mood/style_prompt`。
+- 直接调用 `PromptRefinerService.refine_from_audio_features()`（真实 SiliconFlow，新模板）：通过，返回中文提示词、英文提示词和参数建议。
+- 直接调用 `MusicGenerationService.stream_generate()`（真实 MiniMax）：通过，收到多段 `status=1`，最终收到 `status=2`，返回完整音频与 `extra_info`。
+- 真实 `POST /v1/songs/generate/image` SSE：通过，逐行消费时收到多段 `status=1`，最终收到 `status=2` 和完整 `song`。
+- 真实 `WS /v1/asr/stream`：通过握手并收到 `started` 事件；发送静音字节后上游返回 `engine error|37005:Client idle timeout`，后端已正确透传错误且未再抛 `500`。
 
 ## 尚未解决的问题
 
-- 当前 `.env` 中真实第三方凭证全部缺失，无法开始真实 GitHub/QQ OAuth、SiliconFlow、MiniMax、讯飞 RTASR 联调。
 - `cover_url` 当前用本地生成占位文件表示，后续可替换为真实封面生成逻辑。
+- 当前 `.env` 中仍未填写 `GITHUB_CLIENT_ID/SECRET` 与 `QQ_CLIENT_ID/SECRET`，因此未做真实 OAuth 联调。
+- `ASR_API_URL` 仍为空，因此 `/v1/asr/transcribe` 与 `/v1/songs/generate/voice` 里的“文件转写”仍不会走真实服务。
+- `MOCK_AUDIO_ANALYSIS=true` 且 `ENABLE_ESSENTIA=false` 时，voice 生成仍不是完整真实链路。
+- 讯飞 RTASR 对静音/无效音频帧会返回 `engine error|37005:Client idle timeout`；当前证明的是桥接和错误透传正常，不是“有效语音样本识别通过”。
+- 某些非流式 HTTP 客户端（如直接 `httpx.post()` 等整个 SSE body 读完）可能在最终事件已返回后看到 `incomplete chunked read`；前端按 SSE 逐行消费不受影响，但仍建议补一个收尾回归测试。
 - 目前覆盖的是主 happy path；更细的异常路径、并发场景、SSE 断线恢复仍可继续补强。
 - `docs/wolrd-echo-architecture.png` 文件名与需求描述不一致，实施按仓库实际文件名处理。
 
 ## 下一次继续时应该执行的具体任务
 
-- 填入真实第三方凭证，并把对应 `MOCK_*` 开关关闭。
-- 依次做 GitHub OAuth、QQ OAuth、SiliconFlow、MiniMax、讯飞 RTASR 的端到端联调。
-- 为真实联调结果补充回归测试和错误处理修正。
+- 补齐 GitHub/QQ OAuth 凭证并做真实回调联调。
+- 提供一个可被文件转写链路使用的真实 `ASR_API_URL`，验证 `/v1/asr/transcribe` 和 `/v1/songs/generate/voice`。
+- 关闭 `MOCK_AUDIO_ANALYSIS`、开启 `ENABLE_ESSENTIA=true`，用真实音频样本验证完整 voice 生成链路。
+- 为 MiniMax 真实流格式、XFYun 错误透传和 SSE 最终收尾增加回归测试。
 - 增加失败路径、权限错误、重复提交、封禁用户、SSE 失败事件的自动化测试。
 - 增加并发点赞、歌单排序边界、文件大小/格式校验的回归测试。

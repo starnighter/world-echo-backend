@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -13,6 +14,7 @@ from urllib.parse import quote
 import httpx
 import websockets
 from fastapi import WebSocket
+from websockets import ConnectionClosed
 
 from app.core.config import Settings
 from app.core.exceptions import BadRequestException
@@ -62,12 +64,17 @@ class ASRService:
                     elif message.get("text"):
                         text = message["text"]
                         if text == "__end__":
-                            await upstream.send(json.dumps({"end": True}))
+                            try:
+                                await upstream.send(json.dumps({"end": True}))
+                            except ConnectionClosed:
+                                pass
                             break
                     else:
                         break
             finally:
                 receive_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await receive_task
 
     async def _mock_bridge_stream(self, websocket: WebSocket, language: str) -> None:
         chunk_count = 0

@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     siliconflow_api_url: str = "https://api.siliconflow.cn/v1/chat/completions"
     siliconflow_base_url: str = "https://api.siliconflow.cn/v1"
     siliconflow_api_key: str = ""
-    siliconflow_model: str = "Qwen/Qwen2.5-VL-72B-Instruct"
+    siliconflow_model: str = "Qwen/Qwen3-VL-32B-Instruct"
 
     mock_audio_analysis: bool = True
     enable_essentia: bool = False
