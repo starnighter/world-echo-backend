@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "world-echo-backend"
+version = "1.0.0"
+description = "World Echo FastAPI backend"
+requires-python = ">=3.11"
+dependencies = [
+  "asyncpg>=0.29.0",
+  "fastapi>=0.115.0",
+  "httpx>=0.28.0",
+  "passlib[bcrypt]>=1.7.4",
+  "pydantic-settings>=2.6.0",
+  "python-jose[cryptography]>=3.3.0",
+  "python-multipart>=0.0.12",
+  "sqlalchemy>=2.0.36",
+  "uvicorn[standard]>=0.32.0",
+  "websockets>=14.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+]
+essentia = [
+  "essentia-tensorflow>=2.1b6.dev1389",
+  "matplotlib>=3.9.0",
+  "numpy>=2.1.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["app/tests"]
