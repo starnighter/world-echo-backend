@@ -27,6 +27,7 @@
 - API 文档与 OpenAPI JSON 同步更新（包含 `WS /v1/asr/stream`）
 - 基于 `test-files/` 的三条音乐生成接口回放验证
 - 生成音乐统一收集到本地播放目录 `playback-check/20260507-203716/`
+- `music-cover` 公网音频 URL 翻唱验证
 
 ## 当前正在做的模块
 
@@ -51,9 +52,11 @@
 - `app/services/auth_service.py`
 - `app/services/music_generation_service.py`
 - `app/services/prompt_refiner_service.py`
+- `app/services/storage_service.py`
 - `app/tests/test_api_endpoints.py`
 - `playback-check/20260507-203716/prompt.mp3`
 - `playback-check/20260507-203716/image.mp3`
+- `playback-check/20260507-203716/public-url-music-cover.mp3`
 - `playback-check/20260507-203716/voice.mp3`
 - `playback-check/20260507-203716/summary.json`
 
@@ -67,11 +70,13 @@
 - 真实 `POST /v1/songs/generate/image` SSE：通过，逐行消费时收到多段 `status=1`，最终收到 `status=2` 和完整 `song`。
 - 真实 `WS /v1/asr/stream`：通过握手并收到 `started` 事件；发送静音字节后上游返回 `engine error|37005:Client idle timeout`，后端已正确透传错误且未再抛 `500`。
 - `.venv/bin/pytest app/tests -q`（新增普通注册/登录后再次执行）：`14 passed in 69.11s`。
+- `python3 -m compileall app`（新增远程 `source_url` 物化支持后再次执行）：通过。
 - 使用普通注册账号跑三条生成接口（未调用直接 ASR 接口）：
   - `POST /v1/songs/generate/prompt`：通过，`status=2`
   - `POST /v1/songs/generate/image`：通过，`status=2`
   - `POST /v1/songs/generate/voice`：通过，`status=2`
 - 三个生成结果已复制到 `playback-check/20260507-203716/`，可直接播放检查。
+- 使用公网参考音频 URL 跑 `POST /v1/songs/generate/voice`，参数 `model_used=music-cover`：通过，`status=2`，结果已复制到 `playback-check/20260507-203716/public-url-music-cover.mp3`。
 
 ## 尚未解决的问题
 
@@ -79,7 +84,8 @@
 - 当前 `.env` 中仍未填写 `GITHUB_CLIENT_ID/SECRET` 与 `QQ_CLIENT_ID/SECRET`，因此未做真实 OAuth 联调。
 - `ASR_API_URL` 仍为空，因此 `/v1/asr/transcribe` 与 `/v1/songs/generate/voice` 里的“文件转写”仍不会走真实服务。
 - `MOCK_AUDIO_ANALYSIS=true` 且 `ENABLE_ESSENTIA=false` 时，voice 生成仍不是完整真实链路。
-- 本次 `voice` 生成验证为了避免外部模型拉取本机 `localhost` 音频失败，显式使用了 `model_used=music-2.6`，没有走 `music-cover` 的远端参考音频拉取模式。
+- 基于 `test-files/test-environmental-sound.m4a` 的本地 `voice` 生成验证为了避免外部模型拉取本机 `localhost` 音频失败，显式使用了 `model_used=music-2.6`，没有走 `music-cover` 的远端参考音频拉取模式。
+- 现已补上对公网音频 URL 的支持，并用 iTunes 公开预览地址实际跑通 `music-cover`。
 - 讯飞 RTASR 对静音/无效音频帧会返回 `engine error|37005:Client idle timeout`；当前证明的是桥接和错误透传正常，不是“有效语音样本识别通过”。
 - 某些非流式 HTTP 客户端（如直接 `httpx.post()` 等整个 SSE body 读完）可能在最终事件已返回后看到 `incomplete chunked read`；前端按 SSE 逐行消费不受影响，但仍建议补一个收尾回归测试。
 - 目前覆盖的是主 happy path；更细的异常路径、并发场景、SSE 断线恢复仍可继续补强。
@@ -90,7 +96,6 @@
 - 补齐 GitHub/QQ OAuth 凭证并做真实回调联调。
 - 提供一个可被文件转写链路使用的真实 `ASR_API_URL`，验证 `/v1/asr/transcribe` 和 `/v1/songs/generate/voice`。
 - 关闭 `MOCK_AUDIO_ANALYSIS`、开启 `ENABLE_ESSENTIA=true`，用真实音频样本验证完整 voice 生成链路。
-- 若要验证 `music-cover`，需要提供可被 MiniMax 直接访问的公网音频 URL，而不是本机 `localhost` 地址。
 - 为 MiniMax 真实流格式、XFYun 错误透传和 SSE 最终收尾增加回归测试。
 - 增加失败路径、权限错误、重复提交、封禁用户、SSE 失败事件的自动化测试。
 - 增加并发点赞、歌单排序边界、文件大小/格式校验的回归测试。

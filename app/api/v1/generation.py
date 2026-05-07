@@ -148,7 +148,12 @@ async def generate_image_song(
     accept: str | None = Header(default=None),
 ):
     _ensure_sse_accept(accept)
-    image_path = storage_service.resolve_local_path(payload.source_url)
+    image_path = await storage_service.materialize_source(
+        payload.source_url,
+        category="remote/images",
+        default_extension="png",
+        max_size_mb=settings.upload_image_max_mb,
+    )
     analysis = await vision_service.analyze_image(image_path, payload.prompt)
     final_prompt = analysis.get("style_prompt") or payload.prompt or "cinematic soundtrack"
     model_used = payload.model_used or "music-2.6"
@@ -175,7 +180,12 @@ async def generate_voice_song(
     accept: str | None = Header(default=None),
 ):
     _ensure_sse_accept(accept)
-    audio_path = storage_service.resolve_local_path(payload.source_url)
+    audio_path = await storage_service.materialize_source(
+        payload.source_url,
+        category="remote/audio",
+        default_extension="m4a",
+        max_size_mb=settings.upload_audio_max_mb,
+    )
     analysis = await audio_analysis_service.analyze(audio_path)
     asr_result = await asr_service.transcribe(audio_path.read_bytes(), audio_path.name, language="zh")
     analysis["asr_text"] = asr_result["text"]

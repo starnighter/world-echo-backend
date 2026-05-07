@@ -95,6 +95,7 @@
 - [x] Re-run `prompt`, `image`, and `voice` generation endpoints with files from `test-files/`.
 - [x] Skip direct ASR endpoint smoke tests during this playback pass.
 - [x] Copy generated music outputs into a single local playback directory for manual review.
+- [x] Validate `music-cover` against a public remote audio URL and copy the result into the same playback directory.
 
 ## Risks
 
