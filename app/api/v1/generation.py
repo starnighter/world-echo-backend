@@ -17,6 +17,7 @@ from app.schemas.song import ImageGenerateRequest, PromptGenerateRequest, VoiceG
 from app.services.asr_service import ASRService
 from app.services.audio_analysis_service import AudioAnalysisService
 from app.services.music_generation_service import MusicGenerationService
+from app.services.prompt_refiner_service import PromptRefinerService
 from app.services.song_service import SongService
 from app.services.storage_service import StorageService
 from app.services.vision_prompt_service import VisionPromptService
@@ -30,6 +31,7 @@ vision_service = VisionPromptService(settings)
 audio_analysis_service = AudioAnalysisService(settings)
 music_service = MusicGenerationService(settings)
 asr_service = ASRService(settings)
+prompt_refiner_service = PromptRefinerService(settings)
 
 
 def _ensure_sse_accept(accept: str | None) -> None:
@@ -177,7 +179,13 @@ async def generate_voice_song(
     analysis = await audio_analysis_service.analyze(audio_path)
     asr_result = await asr_service.transcribe(audio_path.read_bytes(), audio_path.name, language="zh")
     analysis["asr_text"] = asr_result["text"]
-    final_prompt = ", ".join(
+    refined = await prompt_refiner_service.refine_from_audio_features(
+        audio_features=analysis,
+        asr_text=asr_result["text"],
+        extra_prompt=payload.prompt,
+    )
+    analysis["prompt_refinement"] = refined
+    final_prompt = refined.get("style_prompt") or ", ".join(
         [
             payload.prompt or "",
             f"bpm {analysis.get('bpm')}",

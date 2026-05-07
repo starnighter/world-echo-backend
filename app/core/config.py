@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     qq_client_id: str = ""
     qq_client_secret: str = ""
     qq_redirect_uri: str = "http://localhost:8000/v1/auth/oauth/qq/callback"
+    qq_scope: str = "get_user_info"
     mock_oauth: bool = True
 
     mock_asr: bool = True
@@ -50,7 +51,8 @@ class Settings(BaseSettings):
     xfyun_rtasr_url: str = "ws://rtasr.xfyun.cn/v1/ws"
 
     mock_vision_prompt: bool = True
-    siliconflow_api_url: str = ""
+    siliconflow_api_url: str = "https://api.siliconflow.cn/v1/chat/completions"
+    siliconflow_base_url: str = "https://api.siliconflow.cn/v1"
     siliconflow_api_key: str = ""
     siliconflow_model: str = "Qwen/Qwen2.5-VL-72B-Instruct"
 

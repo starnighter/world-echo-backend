@@ -17,10 +17,11 @@
 - Docker Compose 冒烟验证
 - mock OAuth 登录与 `/auth/me` 鉴权链路验证
 - API、SSE、WebSocket ASR 自动化测试
+- 真实第三方适配代码补齐（QQ OAuth、SiliconFlow、MiniMax、讯飞 RTASR、Essentia）
 
 ## 当前正在做的模块
 
-- 当前阶段已完成，等待下一步任务。
+- 真实联调准备已完成，当前阻塞于缺少第三方凭证。
 
 ## 修改过的文件列表
 
@@ -28,6 +29,7 @@
 - `PROGRESS.md`
 - `README.md`
 - `.env.example`
+- `app/core/config.py`
 - `.dockerignore`
 - `.gitignore`
 - `Dockerfile`
@@ -74,6 +76,7 @@
 - `app/services/audio_analysis_service.py`
 - `app/services/vision_prompt_service.py`
 - `app/services/music_generation_service.py`
+- `app/services/prompt_refiner_service.py`
 - `app/services/song_service.py`
 - `app/services/playlist_service.py`
 - `app/services/favorite_service.py`
@@ -104,16 +107,20 @@
 - `docker exec world-echo-backend-api-1 python -c "... urllib.request.urlopen('http://127.0.0.1:8000/health') ..."`：通过，返回 `{"code":0,"message":"success","data":{"status":"ok"}}`。
 - `docker exec world-echo-backend-api-1 python -c "... /v1/auth/oauth/github/callback ... /v1/auth/me ..."`：通过，mock OAuth 登录和 JWT 鉴权链路正常。
 - `.venv/bin/pytest app/tests -q`：`14 passed`。
+- `python3 -m compileall app`（在真实适配代码补齐后再次执行）：通过。
+- `.venv/bin/pytest app/tests -q`（在真实适配代码补齐后再次执行）：`14 passed`。
 
 ## 尚未解决的问题
 
-- 真实 QQ OAuth、硅基流动、MiniMax、讯飞 RTASR 仍依赖环境变量和联调。
+- 当前 `.env` 中真实第三方凭证全部缺失，无法开始真实 GitHub/QQ OAuth、SiliconFlow、MiniMax、讯飞 RTASR 联调。
 - `cover_url` 当前用本地生成占位文件表示，后续可替换为真实封面生成逻辑。
 - 目前覆盖的是主 happy path；更细的异常路径、并发场景、SSE 断线恢复仍可继续补强。
 - `docs/wolrd-echo-architecture.png` 文件名与需求描述不一致，实施按仓库实际文件名处理。
 
 ## 下一次继续时应该执行的具体任务
 
-- 在有真实第三方凭证时补 MiniMax、讯飞、硅基流动联调。
+- 填入真实第三方凭证，并把对应 `MOCK_*` 开关关闭。
+- 依次做 GitHub OAuth、QQ OAuth、SiliconFlow、MiniMax、讯飞 RTASR 的端到端联调。
+- 为真实联调结果补充回归测试和错误处理修正。
 - 增加失败路径、权限错误、重复提交、封禁用户、SSE 失败事件的自动化测试。
 - 增加并发点赞、歌单排序边界、文件大小/格式校验的回归测试。

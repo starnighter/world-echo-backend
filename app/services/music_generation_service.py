@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
 import httpx
 
+from app.core.exceptions import BadRequestException, UnprocessableException
 from app.core.config import Settings
 
 
@@ -42,11 +42,19 @@ class MusicGenerationService:
         payload: dict[str, Any] = {
             "model": model,
             "prompt": prompt,
-            "lyrics": lyrics,
             "stream": True,
             "output_format": "hex",
             "is_instrumental": is_instrumental,
+            "audio_setting": {
+                "sample_rate": 44100,
+                "bitrate": 256000,
+                "format": "mp3",
+            },
         }
+        if lyrics:
+            payload["lyrics"] = lyrics
+        elif model.startswith("music-2.6") and not is_instrumental:
+            payload["lyrics_optimizer"] = True
         if audio_url:
             payload["audio_url"] = audio_url
 
@@ -60,10 +68,16 @@ class MusicGenerationService:
                     if data.strip() == "[DONE]":
                         break
                     item = httpx.Response(200, text=data).json()
+                    base_resp = item.get("base_resp") or {}
+                    if base_resp.get("status_code") not in (None, 0):
+                        raise UnprocessableException(base_resp.get("status_msg", "MiniMax generation failed"))
+                    music_data = item.get("data") or {}
+                    audio_hex = music_data.get("audio")
+                    extra_info = self._normalize_extra_info(item.get("extra_info"))
                     yield GeneratedChunk(
-                        status=int(item["data"]["status"]),
-                        audio_hex=item["data"].get("audio"),
-                        extra_info=item.get("extra_info"),
+                        status=int(music_data["status"]),
+                        audio_hex=audio_hex,
+                        extra_info=extra_info,
                     )
 
     async def _mock_stream_generate(self, *, model: str, prompt: str, lyrics: str | None) -> AsyncIterator[GeneratedChunk]:
@@ -90,3 +104,15 @@ class MusicGenerationService:
                 "lyrics_present": lyrics is not None,
             },
         )
+
+    @staticmethod
+    def _normalize_extra_info(extra_info: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not extra_info:
+            return extra_info
+        return {
+            "duration": extra_info.get("duration", extra_info.get("music_duration")),
+            "sample_rate": extra_info.get("sample_rate", extra_info.get("music_sample_rate")),
+            "channel": extra_info.get("channel", extra_info.get("music_channel")),
+            "bitrate": extra_info.get("bitrate"),
+            "size": extra_info.get("size", extra_info.get("music_size")),
+        }

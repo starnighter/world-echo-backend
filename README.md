@@ -59,6 +59,30 @@ Default `.env.example` keeps mock integrations enabled:
 
 This allows local API development without real third-party credentials.
 
+## Real third-party integration
+
+The codebase now includes real adapter paths for:
+
+- GitHub OAuth
+- QQ OAuth
+- SiliconFlow prompt generation
+- MiniMax music generation
+- XFYun RTASR WebSocket bridge
+- Essentia-based audio analysis
+
+To switch from mock mode:
+
+1. Set the required credentials in `.env`
+2. Turn off the related `MOCK_*` flags
+3. For Essentia analysis, install the optional dependency set and set `ENABLE_ESSENTIA=true`
+
+Minimum credential set by integration:
+
+- OAuth: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `QQ_CLIENT_ID`, `QQ_CLIENT_SECRET`
+- SiliconFlow: `SILICONFLOW_API_KEY`
+- MiniMax: `MINIMAX_API_KEY`
+- XFYun RTASR: `XFYUN_APP_ID`, `XFYUN_API_KEY`
+
 ## Tests
 
 Available test files:

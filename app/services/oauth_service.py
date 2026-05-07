@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode
 
 import httpx
 
@@ -37,6 +37,7 @@ class OAuthService:
                 "response_type": "code",
                 "client_id": self.settings.qq_client_id or "mock-qq-client",
                 "redirect_uri": self.settings.qq_redirect_uri,
+                "scope": self.settings.qq_scope,
                 "state": secrets.token_urlsafe(16),
             }
             return f"https://graph.qq.com/oauth2.0/authorize?{urlencode(params)}"
@@ -52,9 +53,13 @@ class OAuthService:
                 email=f"{provider}_{suffix}@example.com",
                 avatar_url=f"https://cdn.world-echo.com/mock/{provider}/{suffix}.png",
             )
-        if provider != "github":
-            raise BadRequestException("QQ real OAuth is not configured in this build")
+        if provider == "github":
+            return await self._fetch_github_identity(code)
+        if provider == "qq":
+            return await self._fetch_qq_identity(code)
+        raise BadRequestException("Unsupported OAuth provider")
 
+    async def _fetch_github_identity(self, code: str) -> OAuthIdentity:
         async with httpx.AsyncClient(timeout=20.0) as client:
             token_resp = await client.post(
                 "https://github.com/login/oauth/access_token",
@@ -89,9 +94,64 @@ class OAuthService:
                 email = primary.get("email") if primary else None
 
         return OAuthIdentity(
-            provider=provider,
+            provider="github",
             provider_uid=str(user_payload["id"]),
             username=user_payload.get("login") or f"github_{user_payload['id']}",
             email=email,
             avatar_url=user_payload.get("avatar_url"),
+        )
+
+    async def _fetch_qq_identity(self, code: str) -> OAuthIdentity:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            token_resp = await client.get(
+                "https://graph.qq.com/oauth2.0/token",
+                params={
+                    "grant_type": "authorization_code",
+                    "client_id": self.settings.qq_client_id,
+                    "client_secret": self.settings.qq_client_secret,
+                    "code": code,
+                    "redirect_uri": self.settings.qq_redirect_uri,
+                    "fmt": "json",
+                },
+            )
+            token_resp.raise_for_status()
+            token_payload = token_resp.json() if "application/json" in token_resp.headers.get("content-type", "") else parse_qs(token_resp.text)
+            access_token = token_payload.get("access_token")
+            if isinstance(access_token, list):
+                access_token = access_token[0]
+            if not access_token:
+                raise BadRequestException("Invalid OAuth code")
+
+            openid_resp = await client.get(
+                "https://graph.qq.com/oauth2.0/me",
+                params={"access_token": access_token, "fmt": "json"},
+            )
+            openid_resp.raise_for_status()
+            openid_payload = openid_resp.json()
+            openid = openid_payload.get("openid")
+            if not openid:
+                raise BadRequestException("QQ openid not found")
+
+            user_resp = await client.get(
+                "https://graph.qq.com/user/get_user_info",
+                params={
+                    "access_token": access_token,
+                    "oauth_consumer_key": self.settings.qq_client_id,
+                    "openid": openid,
+                    "format": "json",
+                },
+            )
+            user_resp.raise_for_status()
+            user_payload = user_resp.json()
+            if user_payload.get("ret") not in (0, None):
+                raise BadRequestException(user_payload.get("msg", "QQ user info failed"))
+
+        nickname = user_payload.get("nickname") or f"qq_{openid[:8]}"
+        avatar = user_payload.get("figureurl_qq_2") or user_payload.get("figureurl_2") or user_payload.get("figureurl")
+        return OAuthIdentity(
+            provider="qq",
+            provider_uid=openid,
+            username=nickname,
+            email=None,
+            avatar_url=avatar,
         )

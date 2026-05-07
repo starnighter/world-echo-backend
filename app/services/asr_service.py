@@ -5,6 +5,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import time
 from typing import Any
 from urllib.parse import quote
@@ -53,6 +54,7 @@ class ASRService:
         async with websockets.connect(target_url, max_size=None) as upstream:
             receive_task = asyncio.create_task(self._forward_upstream_messages(websocket, upstream))
             try:
+                await websocket.send_json({"event": "started", "language": language})
                 while True:
                     message = await websocket.receive()
                     if "bytes" in message and message["bytes"] is not None:
@@ -95,7 +97,53 @@ class ASRService:
 
     async def _forward_upstream_messages(self, websocket: WebSocket, upstream) -> None:
         async for message in upstream:
-            await websocket.send_text(message)
+            await self._relay_xfyun_message(websocket, message)
+
+    async def _relay_xfyun_message(self, websocket: WebSocket, message: str) -> None:
+        payload = json.loads(message)
+        action = payload.get("action")
+        if action == "started":
+            return
+        if action == "result":
+            transcript = self._extract_xfyun_text(payload.get("data", ""))
+            await websocket.send_json(
+                {
+                    "event": "result",
+                    "text": transcript,
+                    "is_final": False,
+                    "raw": payload,
+                }
+            )
+            return
+        if action == "error":
+            await websocket.send_json(
+                {
+                    "event": "error",
+                    "text": payload.get("desc") or payload.get("message") or "xfyun error",
+                    "raw": payload,
+                }
+            )
+            return
+        await websocket.send_json({"event": "raw", "raw": payload})
+
+    def _extract_xfyun_text(self, raw_data: str) -> str:
+        try:
+            outer = json.loads(raw_data)
+            segments = outer.get("cn", {}).get("st", {}).get("rt", [])
+            words: list[str] = []
+            for segment in segments:
+                for ws_item in segment.get("ws", []):
+                    for candidate in ws_item.get("cw", []):
+                        word = candidate.get("w")
+                        if word:
+                            words.append(word)
+            if words:
+                return "".join(words)
+        except Exception:
+            pass
+
+        matches = re.findall(r'"w":"(.*?)"', raw_data)
+        return "".join(matches)
 
     def _build_xfyun_url(self) -> str:
         ts = str(int(time.time()))
