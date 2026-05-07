@@ -66,13 +66,19 @@ Available test files:
 - `app/tests/test_core.py`
 - `app/tests/test_services.py`
 - `app/tests/test_generation_helpers.py`
+- `app/tests/test_api_endpoints.py`
+- `app/tests/test_generation_streams.py`
+- `app/tests/test_websocket_asr.py`
 
 Run after installing dev dependencies:
 
 ```bash
 pip install -e .[dev]
+docker compose up -d db
 pytest app/tests -q
 ```
+
+Integration tests expect the Docker PostgreSQL service to be reachable on host port `5433`.
 
 ## Current status
 

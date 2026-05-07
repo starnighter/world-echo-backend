@@ -62,9 +62,9 @@
 ## Test Plan
 
 - [x] Unit tests for config, JWT, responses, exceptions, service rules.
-- [ ] API tests for auth, upload, songs, playlists, plaza, favorites, ASR.
-- [ ] SSE tests for prompt/image/voice generation flows.
-- [ ] WebSocket tests for realtime ASR bridge.
+- [x] API tests for auth, upload, songs, playlists, plaza, favorites, ASR.
+- [x] SSE tests for prompt/image/voice generation flows.
+- [x] WebSocket tests for realtime ASR bridge.
 - [x] Mock-mode integration tests.
 
 ## Risks

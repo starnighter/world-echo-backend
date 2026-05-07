@@ -16,6 +16,7 @@
 - 依赖安装与本地虚拟环境验证
 - Docker Compose 冒烟验证
 - mock OAuth 登录与 `/auth/me` 鉴权链路验证
+- API、SSE、WebSocket ASR 自动化测试
 
 ## 当前正在做的模块
 
@@ -81,6 +82,9 @@
 - `app/tests/test_core.py`
 - `app/tests/test_generation_helpers.py`
 - `app/tests/test_services.py`
+- `app/tests/test_api_endpoints.py`
+- `app/tests/test_generation_streams.py`
+- `app/tests/test_websocket_asr.py`
 - `app/models/discogs-effnet-bs64-1.json`
 - `app/models/discogs-effnet-bs64-1.pb`
 - `app/models/genre_discogs400-discogs-effnet-1.json`
@@ -96,18 +100,20 @@
 - `.venv/bin/python -c "import fastapi, sqlalchemy, httpx, jose; import app.main; print('import-ok')"`：通过。
 - `docker compose up -d db`：通过。
 - `docker compose up -d --build api`：通过。
+- `docker compose ps`：通过，测试数据库映射 `5433->5432` 正常。
 - `docker exec world-echo-backend-api-1 python -c "... urllib.request.urlopen('http://127.0.0.1:8000/health') ..."`：通过，返回 `{"code":0,"message":"success","data":{"status":"ok"}}`。
 - `docker exec world-echo-backend-api-1 python -c "... /v1/auth/oauth/github/callback ... /v1/auth/me ..."`：通过，mock OAuth 登录和 JWT 鉴权链路正常。
+- `.venv/bin/pytest app/tests -q`：`14 passed`。
 
 ## 尚未解决的问题
 
 - 真实 QQ OAuth、硅基流动、MiniMax、讯飞 RTASR 仍依赖环境变量和联调。
 - `cover_url` 当前用本地生成占位文件表示，后续可替换为真实封面生成逻辑。
-- 详细的 HTTP API 全覆盖测试、SSE 流式断线场景测试、WebSocket ASR 自动化测试仍可继续补强。
+- 目前覆盖的是主 happy path；更细的异常路径、并发场景、SSE 断线恢复仍可继续补强。
 - `docs/wolrd-echo-architecture.png` 文件名与需求描述不一致，实施按仓库实际文件名处理。
 
 ## 下一次继续时应该执行的具体任务
 
-- 继续补接口级自动化测试，优先覆盖认证、歌曲、歌单、点赞和上传。
-- 增加 SSE 生成接口与 WebSocket ASR 的自动化测试。
 - 在有真实第三方凭证时补 MiniMax、讯飞、硅基流动联调。
+- 增加失败路径、权限错误、重复提交、封禁用户、SSE 失败事件的自动化测试。
+- 增加并发点赞、歌单排序边界、文件大小/格式校验的回归测试。
