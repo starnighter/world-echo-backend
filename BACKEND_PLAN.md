@@ -79,7 +79,7 @@
 - [ ] Validate real GitHub OAuth callback flow.
 - [ ] Validate real QQ OAuth callback flow.
 - [ ] Validate real file transcription flow for `/v1/asr/transcribe`.
-- [ ] Validate fully real voice-generation flow with `ENABLE_ESSENTIA=true` and non-mock audio analysis.
+- [x] Validate fully real voice-generation flow with `ENABLE_ESSENTIA=true` and non-mock audio analysis.
 
 ## Auth And Docs Sync
 
@@ -96,6 +96,7 @@
 - [x] Skip direct ASR endpoint smoke tests during this playback pass.
 - [x] Copy generated music outputs into a single local playback directory for manual review.
 - [x] Validate `music-cover` against a public remote audio URL and copy the result into the same playback directory.
+- [x] Rebuild the local virtual environment on Python 3.11, install `essentia-tensorflow`, and validate the real Essentia -> SiliconFlow -> MiniMax `voice` flow with `test-files/test-environmental-sound.m4a`.
 
 ## Risks
 

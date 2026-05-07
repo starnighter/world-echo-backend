@@ -28,10 +28,14 @@
 - 基于 `test-files/` 的三条音乐生成接口回放验证
 - 生成音乐统一收集到本地播放目录 `playback-check/20260507-203716/`
 - `music-cover` 公网音频 URL 翻唱验证
+- 本地 Python 3.11 虚拟环境重建，并安装 `essentia-tensorflow` 与全部项目依赖
+- `test-files/test-environmental-sound.m4a` 的本地 Essentia 真分析验证
+- 真实 `POST /v1/songs/generate/voice` 链路验证（Essentia -> SiliconFlow -> MiniMax，`model_used=music-2.6`）
+- 真实 Essentia 音频生成结果已复制到 `playback-check/20260507-203716/voice-essentia-real.mp3`
 
 ## 当前正在做的模块
 
-- 当前阶段已收口，剩余未完成的是缺少凭证或缺少配置的链路：GitHub/QQ OAuth、文件转写 ASR、全真实 voice 生成。
+- 当前阶段已收口，剩余未完成的是缺少凭证或缺少配置的链路：GitHub/QQ OAuth、文件转写 ASR。
 
 ## 修改过的文件列表
 
@@ -48,16 +52,20 @@
 - `app/db/init_db.py`
 - `app/db/models.py`
 - `app/services/asr_service.py`
+- `app/services/audio_analysis_service.py`
 - `app/schemas/auth.py`
 - `app/services/auth_service.py`
 - `app/services/music_generation_service.py`
 - `app/services/prompt_refiner_service.py`
 - `app/services/storage_service.py`
+- `Dockerfile`
+- `docker-compose.yml`
 - `app/tests/test_api_endpoints.py`
 - `playback-check/20260507-203716/prompt.mp3`
 - `playback-check/20260507-203716/image.mp3`
 - `playback-check/20260507-203716/public-url-music-cover.mp3`
 - `playback-check/20260507-203716/voice.mp3`
+- `playback-check/20260507-203716/voice-essentia-real.mp3`
 - `playback-check/20260507-203716/summary.json`
 
 ## 已运行的测试和结果
@@ -77,17 +85,23 @@
   - `POST /v1/songs/generate/voice`：通过，`status=2`
 - 三个生成结果已复制到 `playback-check/20260507-203716/`，可直接播放检查。
 - 使用公网参考音频 URL 跑 `POST /v1/songs/generate/voice`，参数 `model_used=music-cover`：通过，`status=2`，结果已复制到 `playback-check/20260507-203716/public-url-music-cover.mp3`。
+- `PYENV_VERSION=3.11.9 pyenv exec python -m venv .venv`：通过，本地虚拟环境已切到 Python 3.11.9。
+- `.venv/bin/python -m pip install --no-build-isolation -e '.[dev,essentia]'`：通过，`essentia-tensorflow` 与开发依赖已安装。
+- `.venv/bin/python -c "import essentia, matplotlib, numpy, fastapi; print('ok')"`：通过。
+- `MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python ... AudioAnalysisService.analyze(test-files/test-environmental-sound.m4a)`：通过，返回 `bpm=119.87`、`key=F minor`、真实 `genre/tags` 与 `spectrogram_path`。
+- 本地 Python 3.11 进程启动真实模式 API：通过，服务运行在 `http://127.0.0.1:8006`。
+- 使用普通注册账号调用真实 `POST /v1/songs/generate/voice`（`test-files/test-environmental-sound.m4a`，`ENABLE_ESSENTIA=true`，`MOCK_AUDIO_ANALYSIS=false`，`MOCK_VISION_PROMPT=false`，`MOCK_MINIMAX=false`，`MOCK_ASR=true`，`model_used=music-2.6`）：通过，收到多段 `status=1`，最终收到 `status=2`，生成歌曲 `3c1fd869-d017-436e-8e3b-5e8feb5eb8bf`，结果文件 `/static/generated/music/2026/05/07/1cb8440987dcd88d98996e506e6c0ff9.mp3`，并已复制到 `playback-check/20260507-203716/voice-essentia-real.mp3`。
 
 ## 尚未解决的问题
 
 - `cover_url` 当前用本地生成占位文件表示，后续可替换为真实封面生成逻辑。
 - 当前 `.env` 中仍未填写 `GITHUB_CLIENT_ID/SECRET` 与 `QQ_CLIENT_ID/SECRET`，因此未做真实 OAuth 联调。
 - `ASR_API_URL` 仍为空，因此 `/v1/asr/transcribe` 与 `/v1/songs/generate/voice` 里的“文件转写”仍不会走真实服务。
-- `MOCK_AUDIO_ANALYSIS=true` 且 `ENABLE_ESSENTIA=false` 时，voice 生成仍不是完整真实链路。
 - 基于 `test-files/test-environmental-sound.m4a` 的本地 `voice` 生成验证为了避免外部模型拉取本机 `localhost` 音频失败，显式使用了 `model_used=music-2.6`，没有走 `music-cover` 的远端参考音频拉取模式。
 - 现已补上对公网音频 URL 的支持，并用 iTunes 公开预览地址实际跑通 `music-cover`。
 - 讯飞 RTASR 对静音/无效音频帧会返回 `engine error|37005:Client idle timeout`；当前证明的是桥接和错误透传正常，不是“有效语音样本识别通过”。
 - 某些非流式 HTTP 客户端（如直接 `httpx.post()` 等整个 SSE body 读完）可能在最终事件已返回后看到 `incomplete chunked read`；前端按 SSE 逐行消费不受影响，但仍建议补一个收尾回归测试。
+- 中断或非流式消费 SSE 时，数据库里可能留下 `status=processing` 的历史记录（例如 `164bc139-f743-4a2a-a09f-a7dd99e5321a`）；需要后续补客户端断连收尾策略。
 - 目前覆盖的是主 happy path；更细的异常路径、并发场景、SSE 断线恢复仍可继续补强。
 - `docs/wolrd-echo-architecture.png` 文件名与需求描述不一致，实施按仓库实际文件名处理。
 
@@ -95,7 +109,7 @@
 
 - 补齐 GitHub/QQ OAuth 凭证并做真实回调联调。
 - 提供一个可被文件转写链路使用的真实 `ASR_API_URL`，验证 `/v1/asr/transcribe` 和 `/v1/songs/generate/voice`。
-- 关闭 `MOCK_AUDIO_ANALYSIS`、开启 `ENABLE_ESSENTIA=true`，用真实音频样本验证完整 voice 生成链路。
 - 为 MiniMax 真实流格式、XFYun 错误透传和 SSE 最终收尾增加回归测试。
+- 为中断/非流式消费 SSE 的场景补任务收尾测试和状态恢复策略。
 - 增加失败路径、权限错误、重复提交、封禁用户、SSE 失败事件的自动化测试。
 - 增加并发点赞、歌单排序边界、文件大小/格式校验的回归测试。

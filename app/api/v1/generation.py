@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Annotated, AsyncIterator
 
 from fastapi import APIRouter, Depends, Header
@@ -193,7 +194,7 @@ async def generate_voice_song(
         audio_features=analysis,
         asr_text=asr_result["text"],
         extra_prompt=payload.prompt,
-        spectrogram_path=None,
+        spectrogram_path=Path(analysis["spectrogram_path"]) if analysis.get("spectrogram_path") else None,
     )
     analysis["prompt_refinement"] = refined
     final_prompt = refined.get("style_prompt") or ", ".join(
