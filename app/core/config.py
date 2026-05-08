@@ -44,11 +44,19 @@ class Settings(BaseSettings):
     mock_oauth: bool = True
 
     mock_asr: bool = True
-    asr_api_url: str = ""
-    asr_api_key: str = ""
-    xfyun_app_id: str = ""
-    xfyun_api_key: str = ""
-    xfyun_rtasr_url: str = "ws://rtasr.xfyun.cn/v1/ws"
+    vivo_app_key: str = ""
+    vivo_asr_ws_url: str = "ws://api-ai.vivo.com.cn/asr/v2"
+    vivo_lasr_base_url: str = "http://api-ai.vivo.com.cn/lasr"
+    vivo_short_asr_engine_id: str = "shortasrinput"
+    vivo_long_asr_engine_id: str = "fileasrrecorder"
+    vivo_user_id: str = "world-echo-backend"
+    vivo_app_package: str = "world.echo.backend"
+    vivo_realtime_min_seconds: float = 1.0
+    vivo_realtime_silence_rms_threshold: float = 150.0
+    vivo_realtime_noise_zcr_threshold: float = 0.35
+    vivo_short_asr_business_info: str = (
+        '{"scenes_pkg":"world.echo.backend","editor_type":"3","pro_id":"world-echo-backend"}'
+    )
 
     mock_vision_prompt: bool = True
     siliconflow_api_url: str = "https://api.siliconflow.cn/v1/chat/completions"

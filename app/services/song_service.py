@@ -77,6 +77,18 @@ class SongService:
         await db.refresh(song)
         return song
 
+    async def fail_song_if_processing(self, db: AsyncSession, song_id: UUID, message: str) -> Song | None:
+        song = await db.get(Song, song_id)
+        if song is None:
+            return None
+        if song.status != "processing":
+            return song
+        song.status = "failed"
+        song.error_msg = message
+        await db.commit()
+        await db.refresh(song)
+        return song
+
     async def list_songs(
         self,
         db: AsyncSession,

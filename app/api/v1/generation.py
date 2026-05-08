@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import random
 from pathlib import Path
@@ -14,7 +15,7 @@ from app.core.config import get_settings
 from app.core.exceptions import BadRequestException, UnprocessableException
 from app.core.responses import success_response
 from app.db.models import User
-from app.db.session import get_db
+from app.db.session import AsyncSessionLocal, get_db
 from app.schemas.song import ImageGenerateRequest, PromptGenerateRequest, VoiceGenerateRequest
 from app.services.asr_service import ASRService
 from app.services.audio_analysis_service import AudioAnalysisService
@@ -41,6 +42,11 @@ def _ensure_sse_accept(accept: str | None) -> None:
         raise BadRequestException("Accept header must be text/event-stream")
 
 
+def _ensure_generation_user_allowed(user: User) -> None:
+    if user.is_banned:
+        raise UnprocessableException("User has been banned")
+
+
 def _sse_line(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
@@ -58,8 +64,6 @@ async def _stream_song_generation(
     extracted_data: dict | None,
     final_prompt: str,
 ) -> AsyncIterator[str]:
-    if user.is_banned:
-        raise UnprocessableException("User has been banned")
     song = await song_service.create_generation_song(
         db,
         user=user,
@@ -74,6 +78,7 @@ async def _stream_song_generation(
 
     final_audio_hex = ""
     final_extra = None
+    cleanup_message = "Song generation stream ended unexpectedly"
     try:
         async for chunk in music_service.stream_generate(
             model=model_used,
@@ -112,9 +117,18 @@ async def _stream_song_generation(
             "song": song_service.to_detail(song).model_dump(mode="json"),
         }
         yield _sse_line(success_response(payload))
+        cleanup_message = ""
+    except (asyncio.CancelledError, GeneratorExit):
+        cleanup_message = "Song generation stream cancelled by client disconnect"
+        raise
     except Exception as exc:
+        cleanup_message = str(exc)
         await song_service.fail_song(db, song, str(exc))
         yield _sse_line({"code": 500, "message": str(exc), "data": {"status": 3, "audio_hex": None, "extra_info": None, "song": None}})
+    finally:
+        if cleanup_message and song.status == "processing":
+            async with AsyncSessionLocal() as cleanup_db:
+                await song_service.fail_song_if_processing(cleanup_db, song.id, cleanup_message)
 
 
 @router.post("/prompt")
@@ -125,6 +139,7 @@ async def generate_prompt_song(
     accept: str | None = Header(default=None),
 ):
     _ensure_sse_accept(accept)
+    _ensure_generation_user_allowed(current_user)
     model_used = payload.model_used or "music-2.6"
     stream = _stream_song_generation(
         db=db,
@@ -149,6 +164,7 @@ async def generate_image_song(
     accept: str | None = Header(default=None),
 ):
     _ensure_sse_accept(accept)
+    _ensure_generation_user_allowed(current_user)
     image_path = await storage_service.materialize_source(
         payload.source_url,
         category="remote/images",
@@ -181,6 +197,7 @@ async def generate_voice_song(
     accept: str | None = Header(default=None),
 ):
     _ensure_sse_accept(accept)
+    _ensure_generation_user_allowed(current_user)
     audio_path = await storage_service.materialize_source(
         payload.source_url,
         category="remote/audio",
