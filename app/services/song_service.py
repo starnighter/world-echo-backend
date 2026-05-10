@@ -58,12 +58,15 @@ class SongService:
         title: str,
         description: str | None,
         extracted_data: dict[str, Any] | None,
+        lyrics: str | None = None,
     ) -> Song:
         song.music_url = music_url
         song.cover_url = cover_url
         song.title = title
         song.description = description
         song.extracted_data = extracted_data
+        if lyrics is not None:
+            song.lyrics = lyrics
         song.status = "done"
         song.error_msg = None
         await db.commit()
@@ -98,6 +101,7 @@ class SongService:
         page_size: int,
         status: str | None,
         source_type: str | None,
+        keyword: str | None = None,
     ) -> tuple[list[Song], int]:
         stmt = select(Song).where(Song.user_id == user.id, Song.deleted_at.is_(None))
         count_stmt = select(func.count()).select_from(Song).where(Song.user_id == user.id, Song.deleted_at.is_(None))
@@ -107,6 +111,10 @@ class SongService:
         if source_type:
             stmt = stmt.where(Song.source_type == source_type)
             count_stmt = count_stmt.where(Song.source_type == source_type)
+        if keyword:
+            pattern = f"%{keyword}%"
+            stmt = stmt.where(Song.title.ilike(pattern))
+            count_stmt = count_stmt.where(Song.title.ilike(pattern))
         stmt = stmt.order_by(Song.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
         rows = (await db.execute(stmt)).scalars().all()
         total = (await db.execute(count_stmt)).scalar_one()

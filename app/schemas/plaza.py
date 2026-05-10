@@ -5,6 +5,7 @@ from app.schemas.song import SongSummary
 
 class PlazaSongItem(SongSummary):
     user: dict[str, str | None]
+    is_liked: bool = False
 
 
 class PlazaListResponse(BaseModel):

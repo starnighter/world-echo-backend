@@ -22,7 +22,7 @@ class PlaylistService:
             select(Playlist)
             .where(Playlist.user_id == user.id, Playlist.deleted_at.is_(None))
             .order_by(Playlist.is_default.desc(), Playlist.created_at.asc())
-            .options(selectinload(Playlist.items))
+            .options(selectinload(Playlist.items).selectinload(PlaylistItem.song))
         )
         return list((await db.execute(stmt)).scalars().unique().all())
 
@@ -74,6 +74,8 @@ class PlaylistService:
         song = await db.get(Song, song_id)
         if song is None or song.deleted_at is not None:
             raise NotFoundException("Song not found")
+        if song.user_id != user.id and not song.is_public:
+            raise ForbiddenException("No permission to add this song")
         exists = await db.execute(
             select(PlaylistItem).where(PlaylistItem.playlist_id == playlist.id, PlaylistItem.song_id == song_id)
         )
@@ -110,6 +112,11 @@ class PlaylistService:
 
     @staticmethod
     def to_summary(playlist: Playlist) -> PlaylistSummary:
+        songs_count = sum(
+            1
+            for item in playlist.items
+            if item.song is not None and item.song.deleted_at is None
+        )
         return PlaylistSummary(
             id=playlist.id,
             title=playlist.title,
@@ -117,7 +124,7 @@ class PlaylistService:
             cover_url=playlist.cover_url,
             is_public=playlist.is_public,
             is_default=playlist.is_default,
-            songs_count=len(playlist.items),
+            songs_count=songs_count,
             created_at=playlist.created_at,
         )
 

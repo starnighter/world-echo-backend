@@ -90,6 +90,8 @@ class AudioAnalysisService:
             graphFilename=str(self.settings.models_dir / "discogs-effnet-bs64-1.pb"),
             output="PartitionedCall:1",
         )(audio_16k)
+        if getattr(embeddings, "size", len(embeddings)) == 0:
+            return []
         classifier = self._build_classifier(predict2d_cls, classifier_pb)
         predictions = classifier(embeddings)
         scores = np_module.mean(predictions, axis=0) if getattr(predictions, "ndim", 1) > 1 else predictions

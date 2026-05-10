@@ -36,6 +36,7 @@ class PromptRefinerService:
             )
             return {
                 "style_prompt": combined or "cinematic pop with emotional vocals",
+                "song_title": None,
                 "summary": "mock-refined",
             }
 
@@ -62,9 +63,11 @@ class PromptRefinerService:
 4. 如果调性、和弦、音高置信度较弱，要说明“无明确旋律中心”或“弱调性”。
 5. 不要要求复制原曲，不要生成侵权描述，只描述可泛化的音乐特征。
 6. 输出中文提示词，同时附带一个英文版 prompt。
-7. 最终输出 JSON，格式如下：
+7. 为这首歌生成一个简洁、不含“Echo”或“回响”的歌曲标题。
+8. 最终输出 JSON，格式如下：
 
 {{
+  "song_title": "...",
   "中文提示词": "...",
   "English Prompt": "...",
   "适合的音乐生成参数建议": {{
@@ -91,7 +94,7 @@ class PromptRefinerService:
                 }
             )
         content.append({"type": "text", "text": user_prompt})
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, trust_env=False) as client:
             response = await client.post(
                 self.settings.siliconflow_api_url,
                 headers={"Authorization": f"Bearer {self.settings.siliconflow_api_key}"},
@@ -107,10 +110,17 @@ class PromptRefinerService:
             content = response.json()["choices"][0]["message"]["content"]
             parsed = self._parse_json_payload(content)
             style_prompt = parsed.get("中文提示词") or parsed.get("style_prompt") or ""
+            song_title = (
+                parsed.get("song_title")
+                or parsed.get("歌曲标题")
+                or parsed.get("标题")
+                or ""
+            )
             english_prompt = parsed.get("English Prompt")
             summary = parsed.get("适合的音乐生成参数建议") or parsed.get("summary")
             return {
                 "style_prompt": style_prompt,
+                "song_title": str(song_title).strip() or None,
                 "english_prompt": english_prompt,
                 "summary": summary,
                 "raw": parsed,

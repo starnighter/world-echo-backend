@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException, NotFoundException, UnprocessableException
@@ -15,7 +15,7 @@ class FavoriteService:
         song = await db.get(Song, song_id)
         if song is None or song.deleted_at is not None:
             raise NotFoundException("Song not found")
-        if song.user_id == user.id or not song.is_public:
+        if not song.is_public:
             raise UnprocessableException("Cannot like this song")
 
         result = await db.execute(
@@ -63,3 +63,24 @@ class FavoriteService:
         favorite.deleted_at = datetime.now(UTC)
         song.likes_count = max(0, song.likes_count - 1)
         await db.commit()
+
+    async def list_favorites(
+        self, db: AsyncSession, user: User, page: int = 1, page_size: int = 20
+    ) -> tuple[list[Song], int]:
+        base = (
+            select(Song)
+            .join(Favorite, Favorite.song_id == Song.id)
+            .where(
+                Favorite.user_id == user.id,
+                Favorite.deleted_at.is_(None),
+                Song.deleted_at.is_(None),
+            )
+            .order_by(Favorite.created_at.desc())
+        )
+        count_stmt = select(func.count()).select_from(
+            base.subquery()
+        )
+        total = (await db.execute(count_stmt)).scalar_one()
+        stmt = base.offset((page - 1) * page_size).limit(page_size)
+        rows = (await db.execute(stmt)).scalars().all()
+        return list(rows), total

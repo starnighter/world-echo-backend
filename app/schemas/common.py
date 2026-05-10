@@ -29,9 +29,11 @@ class UploadResponse(BaseModel):
 
 class SSESongPayload(BaseModel):
     status: int
-    audio_hex: str | None = None
+    song_id: str | None = None
+    phase: str | None = None
+    progress: float | None = None
+    message: str | None = None
     extra_info: dict[str, Any] | None = None
-    song: dict[str, Any] | None = None
 
 
 class TimestampedModel(ORMModel):

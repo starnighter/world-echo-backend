@@ -70,6 +70,7 @@ class Settings(BaseSettings):
 
     mock_minimax: bool = True
     minimax_api_url: str = "https://api.minimaxi.com/v1/music_generation"
+    minimax_lyrics_api_url: str = "https://api.minimaxi.com/v1/lyrics_generation"
     minimax_api_key: str = ""
 
     upload_image_max_mb: int = 10

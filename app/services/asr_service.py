@@ -310,7 +310,7 @@ class ASRService:
         request_headers = {"Authorization": f"Bearer {self.settings.vivo_app_key}"}
         if headers:
             request_headers.update(headers)
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=120.0, trust_env=False) as client:
             response = await client.post(
                 url,
                 params=params,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 from pathlib import Path
 from typing import Annotated, AsyncIterator
 
@@ -12,13 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
-from app.core.exceptions import BadRequestException, UnprocessableException
+from app.core.exceptions import AppException, BadRequestException, UnprocessableException
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import AsyncSessionLocal, get_db
 from app.schemas.song import ImageGenerateRequest, PromptGenerateRequest, VoiceGenerateRequest
 from app.services.asr_service import ASRService
 from app.services.audio_analysis_service import AudioAnalysisService
+from app.services.lyrics_generation_service import LyricsGenerationService
 from app.services.music_generation_service import MusicGenerationService
 from app.services.prompt_refiner_service import PromptRefinerService
 from app.services.song_service import SongService
@@ -33,6 +35,7 @@ storage_service = StorageService(settings)
 vision_service = VisionPromptService(settings)
 audio_analysis_service = AudioAnalysisService(settings)
 music_service = MusicGenerationService(settings)
+lyrics_service = LyricsGenerationService(settings)
 asr_service = ASRService(settings)
 prompt_refiner_service = PromptRefinerService(settings)
 
@@ -51,6 +54,52 @@ def _sse_line(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+def _generation_event(
+    *,
+    song_id: str,
+    status: int,
+    phase: str,
+    message: str | None = None,
+    progress: float | None = None,
+    extra_info: dict | None = None,
+) -> dict:
+    return success_response(
+        {
+            "status": status,
+            "song_id": song_id,
+            "phase": phase,
+            "progress": progress,
+            "message": message,
+            "extra_info": extra_info,
+        }
+    )
+
+
+def _derive_song_title(*, prompt: str | None, final_prompt: str, source_type: str) -> str:
+    raw = (prompt or final_prompt or "").strip()
+    if not raw:
+        return "未命名歌曲"
+
+    first_line = next((line.strip() for line in raw.splitlines() if line.strip()), "")
+    first_sentence = re.split(r"[。！？!?；;,.，]", first_line, maxsplit=1)[0].strip()
+    title = first_sentence or first_line
+    title = re.sub(
+        r"^(请你?|帮我|麻烦你?)?\s*(根据[^，,。.!！?？；;]*?)?(生成|创作|制作|写|做)(一首|一段)?",
+        "",
+        title,
+    ).strip()
+    title = re.sub(r"\s+", " ", title)
+    title = title.strip(" -_：:，,。.!！?？\"'“”‘’")
+    if len(title) < 2:
+        title = "未命名歌曲"
+    if len(title) <= 32:
+        return title
+    truncated = title[:32].rstrip()
+    if " " in truncated:
+        truncated = truncated.rsplit(" ", 1)[0]
+    return truncated or title[:32] or "未命名歌曲"
+
+
 async def _stream_song_generation(
     *,
     db: AsyncSession,
@@ -63,6 +112,7 @@ async def _stream_song_generation(
     model_used: str,
     extracted_data: dict | None,
     final_prompt: str,
+    generated_title: str | None = None,
 ) -> AsyncIterator[str]:
     song = await song_service.create_generation_song(
         db,
@@ -78,45 +128,117 @@ async def _stream_song_generation(
 
     final_audio_hex = ""
     final_extra = None
+    resolved_title = generated_title
+    generation_lyrics = lyrics
     cleanup_message = "Song generation stream ended unexpectedly"
     try:
+        yield _sse_line(
+            _generation_event(
+                song_id=str(song.id),
+                status=1,
+                phase="queued",
+                progress=0.05,
+                message="Generation queued",
+            )
+        )
+        if not is_instrumental and not generation_lyrics:
+            yield _sse_line(
+                _generation_event(
+                    song_id=str(song.id),
+                    status=1,
+                    phase="writing_lyrics",
+                    progress=0.12,
+                    message="Generating lyrics and title",
+                )
+            )
+            lyrics_result = await lyrics_service.generate_full_song(
+                prompt=final_prompt,
+            )
+            generation_lyrics = lyrics_result.lyrics
+            resolved_title = lyrics_result.song_title or resolved_title
+            extracted_data = {
+                **(extracted_data or {}),
+                "lyrics_generation": {
+                    "song_title": lyrics_result.song_title,
+                    "style_tags": lyrics_result.style_tags,
+                },
+            }
+
+        yield _sse_line(
+            _generation_event(
+                song_id=str(song.id),
+                status=1,
+                phase="generating",
+                progress=0.2,
+                message="Generating audio",
+            )
+        )
         async for chunk in music_service.stream_generate(
             model=model_used,
             prompt=final_prompt,
-            lyrics=lyrics,
+            lyrics=generation_lyrics,
             is_instrumental=is_instrumental,
-            audio_url=source_url if source_type == "voice" and model_used.startswith("music-cover") else None,
         ):
-            payload = {
-                "status": chunk.status,
-                "audio_hex": chunk.audio_hex,
-                "extra_info": chunk.extra_info if chunk.status == 2 else None,
-                "song": None,
-            }
             if chunk.status == 1:
-                yield _sse_line(success_response(payload))
+                yield _sse_line(
+                    _generation_event(
+                        song_id=str(song.id),
+                        status=1,
+                        phase="generating",
+                        progress=0.65,
+                        message="Generating audio",
+                    )
+                )
             elif chunk.status == 2:
                 final_audio_hex = chunk.audio_hex or ""
                 final_extra = chunk.extra_info
+        if not final_audio_hex:
+            raise UnprocessableException("No audio generated")
+        try:
+            final_audio = bytes.fromhex(final_audio_hex)
+        except ValueError as exc:
+            raise UnprocessableException("Invalid generated audio") from exc
+        try:
+            final_audio = storage_service.normalize_mp3_payload(final_audio)
+        except AppException as exc:
+            raise UnprocessableException(exc.message) from exc
 
-        music_url = storage_service.save_bytes(bytes.fromhex(final_audio_hex), "generated/music", "mp3")
+        yield _sse_line(
+            _generation_event(
+                song_id=str(song.id),
+                status=1,
+                phase="finalizing",
+                progress=0.9,
+                message="Finalizing song",
+                extra_info=final_extra,
+            )
+        )
+        music_url = storage_service.save_bytes(final_audio, "generated/music", "mp3")
         cover_url = str(random.randint(1, 8))
         song = await song_service.complete_song(
             db,
             song,
             music_url=music_url,
             cover_url=cover_url,
-            title=(prompt or final_prompt)[:50] or "Untitled",
+            title=resolved_title or _derive_song_title(
+                prompt=prompt,
+                final_prompt=final_prompt,
+                source_type=source_type,
+            ),
             description=(final_prompt[:200] if final_prompt else None),
             extracted_data=extracted_data,
+            lyrics=generation_lyrics,
         )
-        payload = {
-            "status": 2,
-            "audio_hex": final_audio_hex,
-            "extra_info": final_extra,
-            "song": song_service.to_detail(song).model_dump(mode="json"),
-        }
-        yield _sse_line(success_response(payload))
+        yield _sse_line(
+            _generation_event(
+                song_id=str(song.id),
+                status=2,
+                phase="completed",
+                progress=1.0,
+                message="Song generated successfully",
+                extra_info=final_extra,
+            )
+        )
         cleanup_message = ""
     except (asyncio.CancelledError, GeneratorExit):
         cleanup_message = "Song generation stream cancelled by client disconnect"
@@ -124,7 +246,20 @@ async def _stream_song_generation(
     except Exception as exc:
         cleanup_message = str(exc)
         await song_service.fail_song(db, song, str(exc))
-        yield _sse_line({"code": 500, "message": str(exc), "data": {"status": 3, "audio_hex": None, "extra_info": None, "song": None}})
+        yield _sse_line(
+            {
+                "code": 500,
+                "message": str(exc),
+                "data": {
+                    "status": 3,
+                    "song_id": str(song.id),
+                    "phase": "failed",
+                    "progress": None,
+                    "message": str(exc),
+                    "extra_info": None,
+                },
+            }
+        )
     finally:
         if cleanup_message and song.status == "processing":
             async with AsyncSessionLocal() as cleanup_db:
@@ -205,7 +340,11 @@ async def generate_voice_song(
         max_size_mb=settings.upload_audio_max_mb,
     )
     analysis = await audio_analysis_service.analyze(audio_path)
-    asr_result = await asr_service.transcribe(audio_path.read_bytes(), audio_path.name, language="zh")
+    asr_result = await asr_service.transcribe(
+        audio_path.read_bytes(),
+        audio_path.name,
+        language="zh",
+    )
     analysis["asr_text"] = asr_result["text"]
     refined = await prompt_refiner_service.refine_from_audio_features(
         audio_features=analysis,
@@ -223,7 +362,8 @@ async def generate_voice_song(
             asr_result["text"],
         ]
     ).strip(", ")
-    model_used = payload.model_used or "music-cover"
+    refined_title = (refined.get("song_title") or "").strip()
+    model_used = "music-2.6"
     stream = _stream_song_generation(
         db=db,
         user=current_user,
@@ -235,5 +375,6 @@ async def generate_voice_song(
         model_used=model_used,
         extracted_data=analysis,
         final_prompt=final_prompt,
+        generated_title=refined_title or None,
     )
     return StreamingResponse(stream, media_type="text/event-stream")

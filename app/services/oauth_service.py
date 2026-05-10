@@ -60,7 +60,7 @@ class OAuthService:
         raise BadRequestException("Unsupported OAuth provider")
 
     async def _fetch_github_identity(self, code: str) -> OAuthIdentity:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=20.0, trust_env=False) as client:
             token_resp = await client.post(
                 "https://github.com/login/oauth/access_token",
                 headers={"Accept": "application/json"},
@@ -102,7 +102,7 @@ class OAuthService:
         )
 
     async def _fetch_qq_identity(self, code: str) -> OAuthIdentity:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=20.0, trust_env=False) as client:
             token_resp = await client.get(
                 "https://graph.qq.com/oauth2.0/token",
                 params={

@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -9,6 +9,7 @@ from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.favorite import FavoriteResponse
+from app.schemas.song import SongListResponse, SongSummary
 from app.services.favorite_service import FavoriteService
 
 
@@ -35,3 +36,18 @@ async def unlike_song(
 ):
     await favorite_service.unlike_song(db, current_user, song_id)
     return success_response(None)
+
+
+@router.get("")
+async def list_favorites(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+):
+    songs, total = await favorite_service.list_favorites(
+        db, current_user, page, page_size
+    )
+    items = [SongSummary.model_validate(s).model_dump(mode="json") for s in songs]
+    payload = SongListResponse(items=items, total=total, page=page, page_size=page_size)
+    return success_response(payload.model_dump(mode="json"))

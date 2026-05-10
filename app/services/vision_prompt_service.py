@@ -26,7 +26,7 @@ class VisionPromptService:
                 "style_prompt": base_prompt,
             }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, trust_env=False) as client:
             image_data_url = self._image_to_data_url(image_path)
             text_prompt = (
                 "你是专业音乐提示词工程师。请根据图片内容生成音乐生成提示词，返回 JSON，"
